@@ -70,11 +70,17 @@ def get_index(substance_name: str) -> Optional[dict]:
 
 
 def get_cached_report_ids(substance_name: str) -> set[str]:
-    """Get the set of report IDs already cached for a substance."""
-    index = get_index(substance_name)
-    if not index:
+    """Get the set of report IDs already cached for a substance.
+
+    Checks actual report files on disk for reliability, rather than
+    relying solely on the index which could be out of sync if the
+    script was interrupted.
+    """
+    slug = _slugify(substance_name)
+    reports_dir = os.path.join(DATA_DIR, slug, "reports")
+    if not os.path.isdir(reports_dir):
         return set()
-    return {r["id"] for r in index.get("reports", [])}
+    return {f[:-5] for f in os.listdir(reports_dir) if f.endswith(".json")}
 
 
 def save_report(substance_name: str, report: dict) -> None:

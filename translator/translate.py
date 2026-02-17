@@ -15,6 +15,18 @@ RETRY_DELAY = 2.0  # seconds between retries
 TIMESTAMP_PATTERN = re.compile(r"(T\+\d+:\d+(?::\d+)?)")
 TIME_PATTERN = re.compile(r"(\d{1,2}:\d{2}\s*(?:am|pm|AM|PM)?)")
 
+# Weight conversion: 1 lb = 0.453592 kg
+LB_TO_KG = 0.453592
+WEIGHT_LB_PATTERN = re.compile(r"([\d.]+)\s*(lbs?|pounds?)", re.IGNORECASE)
+WEIGHT_KG_PATTERN = re.compile(r"([\d.]+)\s*kg", re.IGNORECASE)
+
+# Gender translation map
+GENDER_MAP = {
+    "male": "Homme",
+    "female": "Femme",
+    "not specified": "Non spécifié",
+}
+
 
 def _split_into_chunks(text: str, max_size: int = MAX_CHUNK_SIZE) -> list[str]:
     """Split text into chunks respecting paragraph boundaries.
@@ -151,22 +163,73 @@ def translate_text(text: str, source: str = "en", target: str = "fr") -> Optiona
     return result
 
 
-def translate_report(report: dict) -> dict:
-    """Translate a report's body text if needed.
+def convert_weight_to_kg(weight_str: str) -> str:
+    """Convert a weight string (e.g. '120 lb', '165 lbs') to kg.
 
+    Returns the weight in kg as a string like '54.4 kg'.
+    If already in kg or cannot parse, returns the original string.
+    """
+    if not weight_str or not weight_str.strip():
+        return ""
+
+    # Try to parse pounds
+    match = WEIGHT_LB_PATTERN.search(weight_str)
+    if match:
+        lbs = float(match.group(1))
+        kg = lbs * LB_TO_KG
+        return f"{kg:.1f} kg"
+
+    # Already in kg
+    match = WEIGHT_KG_PATTERN.search(weight_str)
+    if match:
+        return weight_str.strip()
+
+    # Can't parse, return as-is
+    return weight_str
+
+
+def translate_gender(gender: str) -> str:
+    """Translate gender string to French."""
+    if not gender:
+        return ""
+    return GENDER_MAP.get(gender.strip().lower(), gender)
+
+
+def translate_report(report: dict) -> dict:
+    """Translate a report's title and body text if needed.
+
+    Also converts body_weight to kg and translates gender.
     Modifies the report dict in place and returns it.
     Only translates if language is not 'fr'.
     """
+    # Always convert weight and translate gender regardless of language
+    if report.get("body_weight"):
+        report["body_weight_kg"] = convert_weight_to_kg(report["body_weight"])
+
+    if report.get("gender"):
+        report["gender_fr"] = translate_gender(report["gender"])
+
     if report.get("language") == "fr":
         report["body_translated"] = report.get("body_original", "")
+        report["title_translated"] = report.get("title", "")
         return report
 
+    # Translate title
+    title = report.get("title", "")
+    if title:
+        print(f"[translator] Translating title: '{title}'")
+        title_translated = translate_text(title, source="en", target="fr")
+        report["title_translated"] = title_translated if title_translated else title
+    else:
+        report["title_translated"] = ""
+
+    # Translate body
     body = report.get("body_original", "")
     if not body:
         report["body_translated"] = ""
         return report
 
-    print(f"[translator] Translating report '{report.get('title', '?')}' ({len(body)} chars)...")
+    print(f"[translator] Translating report '{title}' ({len(body)} chars)...")
     translated = translate_text(body, source="en", target="fr")
 
     if translated:

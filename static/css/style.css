@@ -236,6 +236,56 @@ a:hover {
     margin-bottom: 1.5rem;
 }
 
+.substance-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.substance-search-form {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.substance-search-input {
+    padding: 0.4rem 0.7rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    outline: none;
+    width: 220px;
+    transition: border-color 0.2s;
+}
+
+.substance-search-input:focus {
+    border-color: var(--green);
+}
+
+.substance-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.substance-search-btn {
+    padding: 0.4rem 0.8rem;
+    background: var(--green);
+    border: none;
+    border-radius: var(--radius);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.substance-search-btn:hover {
+    background: var(--green-dim);
+}
+
 .back-link {
     font-size: 0.85rem;
     color: var(--text-secondary);
@@ -440,6 +490,12 @@ a:hover {
     color: var(--beige);
     border-radius: 3px;
     border: 1px solid rgba(206, 145, 120, 0.25);
+}
+
+.card-weight {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
 }
 
 .card-footer {
@@ -692,6 +748,16 @@ a:hover {
 
     .search-btn {
         width: 100%;
+    }
+
+    .substance-header-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .substance-search-input {
+        width: 160px;
     }
 
     .substance-title {

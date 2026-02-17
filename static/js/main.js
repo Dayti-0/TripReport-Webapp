@@ -35,10 +35,10 @@
             updateStats();
         }
 
-        // If no cached reports or we want to check for new ones, start scraping
-        if (!CACHED_INDEX || !CACHED_INDEX.reports || CACHED_INDEX.reports.length === 0) {
-            startScraping();
-        }
+        // Always start scraping to check for new/missing reports.
+        // The backend skips already-cached reports and will quickly finish
+        // if everything is already downloaded.
+        startScraping();
 
         // Setup event listeners
         setupFilters();
@@ -182,12 +182,17 @@
             : '<span class="card-type-badge badge-solo">solo</span>';
 
         card.innerHTML =
-            '<div class="card-title">' + escapeHtml(report.title) + '</div>' +
+            '<div class="card-title">' + escapeHtml(report.title_translated || report.title) + '</div>' +
             '<div class="card-meta">' +
                 escapeHtml(report.author || "Anonyme") +
                 (report.date ? ' &middot; ' + escapeHtml(report.date) : '') +
             '</div>' +
             '<div class="card-substances">' + substancesHtml + '</div>' +
+            (report.body_weight_kg || report.body_weight
+                ? '<div class="card-weight">' + escapeHtml(report.body_weight_kg || report.body_weight) +
+                  (report.gender_fr || report.gender ? ' &middot; ' + escapeHtml(report.gender_fr || report.gender) : '') +
+                  '</div>'
+                : '') +
             (report.categories
                 ? '<div class="card-categories">' + escapeHtml(report.categories) + '</div>'
                 : '') +
@@ -248,6 +253,7 @@
             // Search filter
             if (searchTerm) {
                 var searchIn = (
+                    (r.title_translated || "") + " " +
                     (r.title || "") + " " +
                     (r.author || "") + " " +
                     (r.substances_text || "") + " " +
