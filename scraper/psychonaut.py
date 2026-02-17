@@ -27,7 +27,7 @@ def _fetch_page(url: str, timeout: int = 15) -> Optional[BeautifulSoup]:
     try:
         response = requests.get(url, headers=HEADERS, timeout=timeout)
         response.raise_for_status()
-        return BeautifulSoup(response.text, "lxml")
+        return BeautifulSoup(response.text, "html.parser")
     except requests.RequestException as e:
         print(f"[psychonaut] Error fetching {url}: {e}")
         return None
