@@ -1,0 +1,6 @@
+Flask==3.0.0
+flask-socketio==5.3.6
+requests==2.31.0
+beautifulsoup4==4.12.2
+deep-translator==1.11.4
+lxml==4.9.3

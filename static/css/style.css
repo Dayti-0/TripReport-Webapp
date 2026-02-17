@@ -1,0 +1,709 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TripReport - Dark Theme Stylesheet
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Reset & Base ─────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #121214;
+    --bg-secondary: #1A1A1E;
+    --bg-tertiary: #202024;
+    --bg-card: #1A1A1E;
+    --border: #222327;
+    --border-hover: #333338;
+    --text-primary: #F0EAD6;
+    --text-secondary: #A0A0A0;
+    --text-muted: #666;
+    --accent: #F0EAD6;
+    --green: #5D9152;
+    --green-dim: #3D6132;
+    --yellow: #E5DC94;
+    --beige: #CE9178;
+    --red: #D16969;
+    --blue: #569CD6;
+    --font-mono: 'Roboto Mono', 'Fira Code', 'Consolas', monospace;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --radius: 6px;
+    --radius-lg: 10px;
+}
+
+html {
+    font-size: 14px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-mono);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+a {
+    color: var(--green);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+a:hover {
+    color: var(--yellow);
+}
+
+/* ─── Home Page ────────────────────────────────────────────────────────────── */
+
+.home-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+}
+
+.home-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.home-title {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--green);
+    letter-spacing: 2px;
+    margin-bottom: 0.5rem;
+}
+
+.home-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-weight: 300;
+}
+
+/* Search */
+.search-form {
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 3rem;
+}
+
+.search-wrapper {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.search-input {
+    flex: 1;
+    padding: 0.8rem 1.2rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(93, 145, 82, 0.2);
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-btn {
+    padding: 0.8rem 1.5rem;
+    background: var(--green);
+    border: none;
+    border-radius: var(--radius);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.search-btn:hover {
+    background: var(--green-dim);
+}
+
+.search-btn:active {
+    transform: scale(0.98);
+}
+
+/* Cached substances */
+.cached-section {
+    width: 100%;
+    max-width: 800px;
+}
+
+.section-title {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cached-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.cached-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.8rem 1.2rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-color 0.2s, transform 0.1s;
+}
+
+.cached-card:hover {
+    border-color: var(--green);
+    transform: translateY(-1px);
+}
+
+.cached-name {
+    color: var(--green);
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.cached-count {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* ─── Progress Bar ─────────────────────────────────────────────────────────── */
+
+.progress-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0.75rem 1.5rem;
+}
+
+.progress-bar-wrapper {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--blue));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ─── Substance Page ───────────────────────────────────────────────────────── */
+
+.substance-page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem;
+}
+
+.substance-header {
+    margin-bottom: 1.5rem;
+}
+
+.back-link {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: inline-block;
+    margin-bottom: 0.5rem;
+}
+
+.back-link:hover {
+    color: var(--green);
+}
+
+.substance-title {
+    font-size: 2rem;
+    color: var(--green);
+    font-weight: 700;
+}
+
+/* Stats bar */
+.stats-bar {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--yellow);
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Layout */
+.substance-layout {
+    display: flex;
+    gap: 1.5rem;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 240px;
+    flex-shrink: 0;
+}
+
+.sidebar-toggle {
+    display: none;
+    width: 100%;
+    padding: 0.6rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    cursor: pointer;
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-content {
+    position: sticky;
+    top: 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+}
+
+.filter-group {
+    margin-bottom: 1rem;
+}
+
+.filter-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.4rem;
+}
+
+.filter-input,
+.filter-select {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+    border-color: var(--green);
+}
+
+.filter-checkboxes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.filter-checkboxes label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.filter-reset-btn {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.filter-reset-btn:hover {
+    border-color: var(--red);
+    color: var(--red);
+}
+
+/* Reports grid */
+.reports-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    align-content: start;
+}
+
+/* Report card */
+.report-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    transition: border-color 0.2s, transform 0.15s;
+    animation: fadeIn 0.3s ease;
+}
+
+.report-card:hover {
+    border-color: var(--green-dim);
+    transform: translateY(-2px);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--green);
+    margin-bottom: 0.4rem;
+    line-height: 1.4;
+}
+
+.card-meta {
+    font-size: 0.75rem;
+    color: var(--yellow);
+    margin-bottom: 0.5rem;
+}
+
+.card-substances {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.6rem;
+}
+
+.substance-tag {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    background: rgba(206, 145, 120, 0.15);
+    color: var(--beige);
+    border-radius: 3px;
+    border: 1px solid rgba(206, 145, 120, 0.25);
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-source {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.card-categories {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+.card-link {
+    font-size: 0.8rem;
+    color: var(--green);
+    font-weight: 500;
+}
+
+.card-link:hover {
+    color: var(--yellow);
+}
+
+.card-type-badge {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+.badge-solo {
+    background: rgba(86, 156, 214, 0.15);
+    color: var(--blue);
+    border: 1px solid rgba(86, 156, 214, 0.25);
+}
+
+.badge-combo {
+    background: rgba(229, 220, 148, 0.15);
+    color: var(--yellow);
+    border: 1px solid rgba(229, 220, 148, 0.25);
+}
+
+/* ─── Report Page ──────────────────────────────────────────────────────────── */
+
+.report-page {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+}
+
+.report-header {
+    margin-bottom: 1.5rem;
+}
+
+.report-article {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+}
+
+.report-meta-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.report-title {
+    font-size: 1.5rem;
+    color: var(--green);
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+}
+
+.report-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: 0.8rem;
+}
+
+.meta-author {
+    color: var(--yellow);
+}
+
+.meta-date {
+    color: var(--text-secondary);
+}
+
+.meta-source {
+    color: var(--text-muted);
+}
+
+/* Substances & dosages */
+.report-substances {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.report-substances h3 {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dose-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.dose-row {
+    display: flex;
+    gap: 1rem;
+    align-items: baseline;
+    font-size: 0.85rem;
+    padding: 0.3rem 0;
+}
+
+.dose-name {
+    color: var(--beige);
+    font-weight: 600;
+    min-width: 120px;
+}
+
+.dose-amount {
+    color: var(--yellow);
+    font-weight: 500;
+}
+
+.dose-route {
+    color: var(--text-secondary);
+}
+
+.dose-form {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.report-bodyweight {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Report body text */
+.report-body {
+    font-size: 0.9rem;
+    line-height: 1.8;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.no-content {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Report footer */
+.report-footer {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+}
+
+.original-link {
+    display: inline-block;
+    padding: 0.6rem 1.2rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--green);
+    font-size: 0.85rem;
+    transition: border-color 0.2s;
+}
+
+.original-link:hover {
+    border-color: var(--green);
+    color: var(--yellow);
+}
+
+/* Not found */
+.not-found {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.not-found h2 {
+    color: var(--red);
+    margin-bottom: 1rem;
+}
+
+.not-found p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+/* ─── Responsive ───────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+    .substance-layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+    }
+
+    .sidebar-toggle {
+        display: block;
+    }
+
+    .sidebar-content {
+        display: none;
+        position: static;
+    }
+
+    .sidebar-content.open {
+        display: block;
+    }
+
+    .reports-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .home-title {
+        font-size: 2rem;
+    }
+
+    .search-wrapper {
+        flex-direction: column;
+    }
+
+    .search-btn {
+        width: 100%;
+    }
+
+    .substance-title {
+        font-size: 1.5rem;
+    }
+
+    .report-article {
+        padding: 1.25rem;
+    }
+
+    .stats-bar {
+        gap: 1rem;
+        padding: 0.75rem 1rem;
+    }
+}

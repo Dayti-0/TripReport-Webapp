@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TripReport</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="home-container">
+        <header class="home-header">
+            <h1 class="home-title">TripReport</h1>
+            <p class="home-subtitle">Recherchez, explorez et lisez des trip reports traduits en fran&ccedil;ais</p>
+        </header>
+
+        <form class="search-form" action="/substance/" method="GET" id="searchForm">
+            <div class="search-wrapper">
+                <input
+                    type="text"
+                    id="searchInput"
+                    class="search-input"
+                    placeholder="Entrez le nom d'une substance..."
+                    autocomplete="off"
+                    autofocus
+                >
+                <button type="submit" class="search-btn">Rechercher</button>
+            </div>
+        </form>
+
+        {% if substances %}
+        <section class="cached-section">
+            <h2 class="section-title">Substances en cache</h2>
+            <div class="cached-grid">
+                {% for sub in substances %}
+                <a href="/substance/{{ sub.slug }}" class="cached-card">
+                    <span class="cached-name">{{ sub.name }}</span>
+                    <span class="cached-count">{{ sub.report_count }} rapports</span>
+                </a>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+    </div>
+
+    <script>
+        document.getElementById('searchForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const substance = document.getElementById('searchInput').value.trim();
+            if (substance) {
+                window.location.href = '/substance/' + encodeURIComponent(substance);
+            }
+        });
+    </script>
+</body>
+</html>
