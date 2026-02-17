@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ substance_name }} - TripReport</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Progress bar -->
+    <div id="progressContainer" class="progress-container" style="display: none;">
+        <div class="progress-bar-wrapper">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="progressText" class="progress-text">Initialisation...</p>
+    </div>
+
+    <div class="substance-page">
+        <!-- Header -->
+        <header class="substance-header">
+            <a href="/" class="back-link">&larr; Retour</a>
+            <h1 class="substance-title">{{ substance_name }}</h1>
+        </header>
+
+        <!-- Stats bar -->
+        <div class="stats-bar" id="statsBar">
+            <div class="stat-item">
+                <span class="stat-value" id="statTotal">0</span>
+                <span class="stat-label">Total</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="statSolo">0</span>
+                <span class="stat-label">Solo</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="statCombo">0</span>
+                <span class="stat-label">Combo</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="statDisplayed">0</span>
+                <span class="stat-label">Affich&eacute;s</span>
+            </div>
+        </div>
+
+        <div class="substance-layout">
+            <!-- Sidebar filters -->
+            <aside class="sidebar" id="sidebar">
+                <button class="sidebar-toggle" id="sidebarToggle">Filtres</button>
+                <div class="sidebar-content" id="sidebarContent">
+                    <div class="filter-group">
+                        <label class="filter-label">Recherche</label>
+                        <input type="text" id="filterSearch" class="filter-input" placeholder="Titre, auteur, substance...">
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Langue</label>
+                        <select id="filterLang" class="filter-select">
+                            <option value="all">Toutes</option>
+                            <option value="fr">Fran&ccedil;ais</option>
+                            <option value="en">Anglais</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Type</label>
+                        <div class="filter-checkboxes">
+                            <label><input type="checkbox" id="filterSolo" value="solo"> Solo</label>
+                            <label><input type="checkbox" id="filterCombo" value="combo"> Combo</label>
+                        </div>
+                    </div>
+                    <div class="filter-group">
+                        <label class="filter-label">Source</label>
+                        <select id="filterSource" class="filter-select">
+                            <option value="all">Toutes</option>
+                            <option value="erowid">Erowid</option>
+                            <option value="psychonaut">Psychonaut.fr</option>
+                            <option value="psychonautwiki">PsychonautWiki</option>
+                        </select>
+                    </div>
+                    <button class="filter-reset-btn" id="filterReset">R&eacute;initialiser</button>
+                </div>
+            </aside>
+
+            <!-- Reports grid -->
+            <main class="reports-grid" id="reportsGrid">
+                <!-- Cards are inserted dynamically -->
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const SUBSTANCE_NAME = {{ substance_name | tojson }};
+        const CACHED_INDEX = {{ cached_index | tojson }};
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

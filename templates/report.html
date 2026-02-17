@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if report %}{{ report.title }}{% else %}Rapport introuvable{% endif %} - TripReport</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="report-page">
+        <header class="report-header">
+            <a href="/substance/{{ substance_name }}" class="back-link">&larr; Retour &agrave; {{ substance_name }}</a>
+        </header>
+
+        {% if report %}
+        <article class="report-article">
+            <div class="report-meta-header">
+                <h1 class="report-title">{{ report.title }}</h1>
+                <div class="report-meta">
+                    <span class="meta-author">Par {{ report.author }}</span>
+                    {% if report.date %}
+                    <span class="meta-date">{{ report.date }}</span>
+                    {% endif %}
+                    <span class="meta-source">Source : {{ report.source }}</span>
+                </div>
+            </div>
+
+            {% if report.substances %}
+            <div class="report-substances">
+                <h3>Substances &amp; dosages</h3>
+                <div class="dose-table">
+                    {% for sub in report.substances %}
+                    <div class="dose-row">
+                        <span class="dose-name">{{ sub.name }}</span>
+                        {% if sub.dose %}
+                        <span class="dose-amount">{{ sub.dose }}</span>
+                        {% endif %}
+                        {% if sub.route %}
+                        <span class="dose-route">{{ sub.route }}</span>
+                        {% endif %}
+                        {% if sub.form %}
+                        <span class="dose-form">{{ sub.form }}</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if report.body_weight %}
+            <div class="report-bodyweight">
+                <strong>Poids :</strong> {{ report.body_weight }}
+            </div>
+            {% endif %}
+
+            <div class="report-body">
+                {% if report.body_translated %}
+                    {{ report.body_translated | replace('\n', '<br>') | safe }}
+                {% elif report.body_original %}
+                    {{ report.body_original | replace('\n', '<br>') | safe }}
+                {% else %}
+                    <p class="no-content">Contenu non disponible.</p>
+                {% endif %}
+            </div>
+
+            {% if report.url %}
+            <div class="report-footer">
+                <a href="{{ report.url }}" target="_blank" rel="noopener" class="original-link">
+                    Voir le rapport original &rarr;
+                </a>
+            </div>
+            {% endif %}
+        </article>
+        {% else %}
+        <div class="not-found">
+            <h2>Rapport introuvable</h2>
+            <p>Ce rapport n'existe pas ou n'a pas encore &eacute;t&eacute; scrap&eacute;.</p>
+            <a href="/substance/{{ substance_name }}" class="back-link">Retour au dashboard</a>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
