@@ -51,6 +51,12 @@
         if (isScraping) return;
         isScraping = true;
 
+        // Disconnect any previous socket before creating a new one
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+
         socket = io();
 
         socket.on("connect", function () {
@@ -289,6 +295,15 @@
         if (!str) return "";
         return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
     }
+
+    // ─── Cleanup ──────────────────────────────────────────────────────────────
+
+    window.addEventListener("beforeunload", function () {
+        if (socket) {
+            socket.disconnect();
+            socket = null;
+        }
+    });
 
     // ─── Start ───────────────────────────────────────────────────────────────
 
