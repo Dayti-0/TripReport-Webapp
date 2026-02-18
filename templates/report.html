@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% if report %}{{ report.title }}{% else %}Rapport introuvable{% endif %} - TripReport</title>
+    <title>{% if report %}{{ report.title_translated or report.title }}{% else %}Rapport introuvable{% endif %} - TripReport</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,7 +17,7 @@
         {% if report %}
         <article class="report-article">
             <div class="report-meta-header">
-                <h1 class="report-title">{{ report.title }}</h1>
+                <h1 class="report-title">{{ report.title_translated or report.title }}</h1>
                 <div class="report-meta">
                     <span class="meta-author">Par {{ report.author }}</span>
                     {% if report.date %}
@@ -51,7 +51,13 @@
 
             {% if report.body_weight %}
             <div class="report-bodyweight">
-                <strong>Poids :</strong> {{ report.body_weight }}
+                <strong>Poids :</strong> {{ report.body_weight_kg or report.body_weight }}
+                {% if report.gender_fr or report.gender %}
+                &middot; <strong>Genre :</strong> {{ report.gender_fr or report.gender }}
+                {% endif %}
+                {% if report.age %}
+                &middot; <strong>&Acirc;ge :</strong> {{ report.age }}
+                {% endif %}
             </div>
             {% endif %}
 
