@@ -1,4 +1,8 @@
-"""Scraper for PsychonautWiki experience reports."""
+"""Scraper for PsychonautWiki experience reports.
+
+Uses the MediaWiki API to search for experience report pages,
+then scrapes individual wiki pages for the full report content.
+"""
 
 import re
 import time
@@ -8,6 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://psychonautwiki.org"
+API_URL = f"{BASE_URL}/w/api.php"
 
 HEADERS = {
     "User-Agent": (
@@ -32,13 +37,64 @@ def _fetch_page(url: str, timeout: int = 15) -> Optional[BeautifulSoup]:
         return None
 
 
-def _normalize_substance(name: str) -> str:
-    """Normalize substance name for PsychonautWiki URL format."""
-    return name.strip().replace(" ", "_")
+def _search_api(substance_name: str, limit: int = 50) -> list[dict]:
+    """Search for experience reports using the MediaWiki API.
+
+    Returns a list of search result dicts with 'title' and 'pageid'.
+    """
+    results = []
+    offset = 0
+
+    while True:
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": f"intitle:Experience {substance_name}",
+            "srnamespace": "0",
+            "srlimit": str(min(limit - len(results), 50)),
+            "sroffset": str(offset),
+            "format": "json",
+        }
+
+        try:
+            response = requests.get(API_URL, params=params, headers=HEADERS, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+        except (requests.RequestException, ValueError) as e:
+            print(f"[psychonautwiki] API error: {e}")
+            break
+
+        search_results = data.get("query", {}).get("search", [])
+        if not search_results:
+            break
+
+        for item in search_results:
+            title = item.get("title", "")
+            # Only include pages that start with "Experience:"
+            if not title.startswith("Experience:"):
+                continue
+            results.append({
+                "title": title,
+                "pageid": item.get("pageid", 0),
+            })
+
+        # Check if we have enough or if there are more results
+        if len(results) >= limit:
+            break
+
+        cont = data.get("continue", {})
+        if "sroffset" not in cont:
+            break
+        offset = cont["sroffset"]
+        time.sleep(0.5)
+
+    return results
 
 
 def scrape_report_list(substance_name: str, callback=None) -> list[dict]:
-    """Scrape the list of experience reports from PsychonautWiki.
+    """Search PsychonautWiki for experience reports mentioning the substance.
+
+    Uses the MediaWiki API to find pages with "Experience:" prefix.
 
     Args:
         substance_name: Name of the substance.
@@ -47,45 +103,28 @@ def scrape_report_list(substance_name: str, callback=None) -> list[dict]:
     Returns:
         List of report metadata dicts.
     """
-    normalized = _normalize_substance(substance_name)
-    index_url = f"{BASE_URL}/wiki/Experience:{normalized}"
+    print(f"[psychonautwiki] Searching API for '{substance_name}' experience reports")
 
-    print(f"[psychonautwiki] Fetching experience index: {index_url}")
-    soup = _fetch_page(index_url)
+    api_results = _search_api(substance_name)
 
     reports = []
+    for item in api_results:
+        title = item["title"]
+        # Remove "Experience:" prefix for display
+        display_title = re.sub(r"^Experience:\s*", "", title)
 
-    if not soup:
-        # Try the general experience index
-        index_url = f"{BASE_URL}/wiki/Experience_index"
-        soup = _fetch_page(index_url)
-        if not soup:
-            return []
+        # Build wiki URL from page title
+        page_slug = title.replace(" ", "_")
+        full_url = f"{BASE_URL}/wiki/{requests.utils.quote(page_slug, safe='/:_')}"
 
-    # Find experience report links
-    content = soup.find("div", id="mw-content-text")
-    if not content:
-        return []
-
-    for link in content.find_all("a", href=True):
-        href = link.get("href", "")
-        if "/wiki/Experience:" not in href:
-            continue
-
-        title = link.text.strip()
-        if not title or title == substance_name:
-            continue
-
-        full_url = BASE_URL + href if href.startswith("/") else href
-
-        # Generate ID from URL
-        page_name = href.split("Experience:")[-1] if "Experience:" in href else href
-        report_id = re.sub(r"[^a-zA-Z0-9_-]", "_", page_name)
+        # Generate a clean ID from the page title
+        clean_id = re.sub(r"[^a-zA-Z0-9_-]", "_", title.replace("Experience:", "").strip())
+        report_id = f"psychonautwiki_{clean_id}"
 
         reports.append({
-            "id": f"psychonautwiki_{report_id}",
+            "id": report_id,
             "source": "psychonautwiki",
-            "title": title,
+            "title": display_title,
             "author": "",
             "date": "",
             "url": full_url,
@@ -116,7 +155,13 @@ def scrape_report(report_url: str, report_id: str) -> Optional[dict]:
         # Remove table of contents and edit sections
         for el in content.find_all(["div", "span"], class_=["toc", "mw-editsection"]):
             el.decompose()
+        # Remove navigation boxes
+        for el in content.find_all("div", class_=["navbox", "noprint"]):
+            el.decompose()
         body_text = content.get_text(separator="\n").strip()
+
+    if not body_text:
+        return None
 
     return {
         "id": report_id,
