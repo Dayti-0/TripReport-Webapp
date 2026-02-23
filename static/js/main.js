@@ -10,6 +10,13 @@
     let socket = null;
     let isScraping = false;
 
+    // Source labels for display
+    var SOURCE_LABELS = {
+        "erowid": "Erowid",
+        "psychonaut": "Psychonaut.fr",
+        "psychonautwiki": "PsychonautWiki"
+    };
+
     // ─── DOM Elements ────────────────────────────────────────────────────────
     const reportsGrid = document.getElementById("reportsGrid");
     const progressContainer = document.getElementById("progressContainer");
@@ -69,26 +76,29 @@
         });
 
         socket.on("scraping_start", function (data) {
+            var label = SOURCE_LABELS[data.source] || data.source;
             showProgress(
-                "Scraping " + data.source + "... 0/" + data.total +
+                "Scraping " + label + "... 0/" + data.total +
                 (data.already_cached ? " (" + data.already_cached + " en cache)" : "")
             );
-            progressBar.style.width = "2%";
+            progressBar.style.width = "5%";
         });
 
         socket.on("report_scraping", function (data) {
-            var pct = Math.round((data.current / data.total) * 50);
+            var label = SOURCE_LABELS[data.source] || data.source;
+            var pct = Math.max(5, Math.round((data.current / data.total) * 80));
             progressBar.style.width = pct + "%";
             showProgress(
-                "Scraping " + data.source + " " + data.current + "/" + data.total +
+                label + " " + data.current + "/" + data.total +
                 " : " + truncate(data.title, 40)
             );
         });
 
         socket.on("report_translating", function (data) {
-            var pct = 50 + Math.round((data.current / data.total) * 50);
+            var label = SOURCE_LABELS[data.source] || data.source;
+            var pct = Math.max(5, Math.round((data.current / data.total) * 80));
             progressBar.style.width = pct + "%";
-            showProgress("Traduction " + data.current + "/" + data.total + "...");
+            showProgress(label + " - Traduction " + data.current + "/" + data.total + "...");
         });
 
         socket.on("report_scraped", function (data) {

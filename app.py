@@ -1,11 +1,12 @@
 """TripReport Webapp - Flask application with WebSocket support."""
 
 import threading
+import time
 
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 
-from scraper.erowid import scrape_report_list, scrape_report
+from scraper import erowid, psychonaut, psychonautwiki
 from translator.translate import translate_report
 from cache.manager import (
     get_cached_substances,
@@ -24,6 +25,13 @@ socketio = SocketIO(app, async_mode="threading")
 # Maps substance_name (lowercase) -> {"thread": Thread, "subscribers": set of sids}
 _active_tasks = {}
 _active_tasks_lock = threading.Lock()
+
+# All scraper modules with their display name
+SCRAPERS = [
+    {"module": erowid, "name": "erowid", "label": "Erowid"},
+    {"module": psychonaut, "name": "psychonaut", "label": "Psychonaut.fr"},
+    {"module": psychonautwiki, "name": "psychonautwiki", "label": "PsychonautWiki"},
+]
 
 
 # ─── Routes ─────────────────────────────────────────────────────────────────
@@ -81,99 +89,155 @@ def _emit_to_subscribers(event: str, data: dict, substance_key: str):
         socketio.emit(event, data, to=sid)
 
 
+def _scrape_source(scraper_info: dict, substance_name: str, substance_key: str,
+                   cached_ids: set[str]) -> int:
+    """Scrape a single source: list reports, scrape + translate new ones, cache them.
+
+    Returns the number of new reports scraped from this source.
+    """
+    source_name = scraper_info["name"]
+    source_label = scraper_info["label"]
+    module = scraper_info["module"]
+
+    _emit_to_subscribers("scraping_status", {
+        "message": f"Récupération de la liste des rapports sur {source_label}...",
+        "phase": "listing",
+        "source": source_name,
+    }, substance_key)
+
+    try:
+        report_list = module.scrape_report_list(substance_name)
+    except Exception as e:
+        print(f"[{source_name}] Error during list scraping: {e}")
+        _emit_to_subscribers("scraping_status", {
+            "message": f"Erreur lors du scraping de {source_label}: {e}",
+            "phase": "error",
+            "source": source_name,
+        }, substance_key)
+        return 0
+
+    if not report_list:
+        _emit_to_subscribers("scraping_status", {
+            "message": f"Aucun rapport trouvé sur {source_label}.",
+            "phase": "empty",
+            "source": source_name,
+        }, substance_key)
+        return 0
+
+    # Filter out already cached reports
+    new_reports = [r for r in report_list if r["id"] not in cached_ids]
+    already_cached = len(report_list) - len(new_reports)
+    total = len(new_reports)
+
+    _emit_to_subscribers("scraping_start", {
+        "source": source_name,
+        "total": total,
+        "total_with_cached": len(report_list),
+        "already_cached": already_cached,
+    }, substance_key)
+
+    if total == 0:
+        _emit_to_subscribers("scraping_status", {
+            "message": f"{source_label} : {already_cached} rapports déjà en cache.",
+            "phase": "cached",
+            "source": source_name,
+        }, substance_key)
+        return 0
+
+    scraped_count = 0
+
+    for i, meta in enumerate(new_reports):
+        # Skip if another thread already cached this report
+        if is_report_cached(substance_name, meta["id"]):
+            cached_ids.add(meta["id"])
+            continue
+
+        _emit_to_subscribers("report_scraping", {
+            "source": source_name,
+            "current": i + 1,
+            "total": total,
+            "title": meta["title"],
+        }, substance_key)
+
+        # Scrape individual report
+        try:
+            report_data = module.scrape_report(meta["url"], meta["id"])
+        except Exception as e:
+            print(f"[{source_name}] Error scraping report {meta['id']}: {e}")
+            continue
+
+        if not report_data:
+            continue
+
+        # Merge date from list if missing
+        if not report_data.get("date") and meta.get("date"):
+            report_data["date"] = meta["date"]
+
+        # Translate if needed (skip French reports from psychonaut.fr)
+        if report_data.get("language") != "fr" and report_data.get("body_original"):
+            _emit_to_subscribers("report_translating", {
+                "source": source_name,
+                "current": i + 1,
+                "total": total,
+                "title": meta["title"],
+            }, substance_key)
+
+            try:
+                translate_report(report_data)
+            except Exception as e:
+                print(f"[{source_name}] Translation error for {meta['id']}: {e}")
+                # Keep the report even if translation fails
+                report_data["body_translated"] = report_data.get("body_original", "")
+
+        # Cache
+        save_report(substance_name, report_data)
+        cached_ids.add(report_data["id"])
+        scraped_count += 1
+
+        # Notify frontend
+        report_meta = {k: v for k, v in report_data.items()
+                       if k not in ("body_original", "body_translated")}
+        _emit_to_subscribers("report_scraped", {
+            "source": source_name,
+            "current": i + 1,
+            "total": total,
+            "report": report_meta,
+        }, substance_key)
+
+        time.sleep(0.2)  # Small delay between WebSocket events
+
+    return scraped_count
+
+
 def _scrape_worker(substance_name: str, substance_key: str):
-    """Background worker that scrapes, translates, and caches reports.
+    """Background worker that scrapes all sources, translates, and caches reports.
 
     Emits progress events via WebSocket to all subscribers.
     """
     try:
-        # Step 1: Get the report list
-        _emit_to_subscribers("scraping_status", {
-            "message": f"Récupération de la liste des rapports pour '{substance_name}'...",
-            "phase": "listing",
-        }, substance_key)
-
-        report_list = scrape_report_list(substance_name)
-        if not report_list:
-            _emit_to_subscribers("scraping_error", {
-                "message": f"Aucun rapport trouvé pour '{substance_name}' sur Erowid.",
-            }, substance_key)
-            return
-
-        # Filter out already cached reports
         cached_ids = get_cached_report_ids(substance_name)
-        new_reports = [r for r in report_list if r["id"] not in cached_ids]
-        already_cached = len(report_list) - len(new_reports)
+        total_new = 0
 
-        total = len(new_reports)
-        _emit_to_subscribers("scraping_start", {
-            "source": "erowid",
-            "total": total,
-            "total_with_cached": len(report_list),
-            "already_cached": already_cached,
-        }, substance_key)
+        for scraper_info in SCRAPERS:
+            new_count = _scrape_source(
+                scraper_info, substance_name, substance_key, cached_ids
+            )
+            total_new += new_count
 
-        if total == 0:
-            _emit_to_subscribers("scraping_complete", {
-                "total_reports": len(report_list),
-                "message": "Tous les rapports sont déjà en cache.",
-            }, substance_key)
-            return
-
-        # Step 2: Scrape and translate each report
-        import time
-
-        for i, meta in enumerate(new_reports):
-            # Skip if another thread already cached this report
-            if is_report_cached(substance_name, meta["id"]):
-                continue
-
-            _emit_to_subscribers("report_scraping", {
-                "source": "erowid",
-                "current": i + 1,
-                "total": total,
-                "title": meta["title"],
-            }, substance_key)
-
-            # Scrape individual report
-            report_data = scrape_report(meta["url"], meta["id"])
-            if not report_data:
-                continue
-
-            # Merge date from list if missing
-            if not report_data.get("date") and meta.get("date"):
-                report_data["date"] = meta["date"]
-
-            # Translate
-            _emit_to_subscribers("report_translating", {
-                "current": i + 1,
-                "total": total,
-                "title": meta["title"],
-            }, substance_key)
-
-            translate_report(report_data)
-
-            # Cache
-            save_report(substance_name, report_data)
-
-            # Notify frontend
-            report_meta = {k: v for k, v in report_data.items()
-                           if k not in ("body_original", "body_translated")}
-            _emit_to_subscribers("report_scraped", {
-                "source": "erowid",
-                "current": i + 1,
-                "total": total,
-                "report": report_meta,
-            }, substance_key)
-
-            time.sleep(0.2)  # Small delay between WebSocket events
-
-        # Step 3: Done
+        # Done
         final_index = get_index(substance_name)
         total_reports = len(final_index["reports"]) if final_index else 0
+
+        if total_new == 0 and total_reports > 0:
+            message = f"Tous les rapports sont déjà en cache ({total_reports} rapports)."
+        elif total_new == 0:
+            message = f"Aucun rapport trouvé pour '{substance_name}'."
+        else:
+            message = f"Scraping terminé ! {total_new} nouveaux rapports, {total_reports} au total."
+
         _emit_to_subscribers("scraping_complete", {
             "total_reports": total_reports,
-            "message": f"Scraping terminé ! {total_reports} rapports disponibles.",
+            "message": message,
         }, substance_key)
     finally:
         # Clean up the task entry
