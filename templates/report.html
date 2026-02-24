@@ -11,6 +11,7 @@
 <body>
     <div class="report-page">
         <header class="report-header">
+            <a href="/" class="site-title">TripReport</a>
             <a href="/substance/{{ substance_name }}" class="back-link">&larr; Retour &agrave; {{ substance_name }}</a>
         </header>
 
@@ -87,5 +88,20 @@
         </div>
         {% endif %}
     </div>
+
+    {% if report %}
+    <script>
+        (function() {
+            var reportId = {{ report.id | tojson }};
+            if (reportId) {
+                var readReports = JSON.parse(localStorage.getItem("readReports") || "[]");
+                if (readReports.indexOf(reportId) === -1) {
+                    readReports.push(reportId);
+                    localStorage.setItem("readReports", JSON.stringify(readReports));
+                }
+            }
+        })();
+    </script>
+    {% endif %}
 </body>
 </html>
