@@ -9,6 +9,7 @@
     let allReports = [];
     let socket = null;
     let isScraping = false;
+    let readReports = JSON.parse(localStorage.getItem("readReports") || "[]");
 
     // Source labels for display
     var SOURCE_LABELS = {
@@ -191,7 +192,14 @@
             ? '<span class="card-type-badge badge-combo">combo</span>'
             : '<span class="card-type-badge badge-solo">solo</span>';
 
+        // Read badge
+        var isRead = readReports.indexOf(report.id) !== -1;
+        if (isRead) {
+            card.classList.add("report-read");
+        }
+
         card.innerHTML =
+            (isRead ? '<span class="card-read-badge">D\u00e9j\u00e0 lu</span>' : '') +
             '<div class="card-title">' + escapeHtml(report.title_translated || report.title) + '</div>' +
             '<div class="card-meta">' +
                 escapeHtml(report.author || "Anonyme") +
