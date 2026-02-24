@@ -7,7 +7,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 
 from scraper import erowid, psychonaut, psychonautwiki
-from translator.translate import translate_report
+from translator.translate import translate_report, translate_text
 from cache.manager import (
     get_cached_substances,
     get_index,
@@ -57,6 +57,22 @@ def report(substance: str, report_id: str):
     report_data = get_report(substance, report_id)
     if not report_data:
         return render_template("report.html", report=None, substance_name=substance), 404
+
+    # Auto-translate title if missing (for reports cached before title translation)
+    if (
+        not report_data.get("title_translated")
+        and report_data.get("title")
+        and report_data.get("language") != "fr"
+    ):
+        try:
+            translated = translate_text(report_data["title"], source="en", target="fr")
+            report_data["title_translated"] = translated if translated else report_data["title"]
+            save_report(substance, report_data)
+            print(f"[auto-translate] Title translated for {report_id}: '{report_data['title_translated']}'")
+        except Exception as e:
+            print(f"[auto-translate] Failed to translate title for {report_id}: {e}")
+            report_data["title_translated"] = report_data["title"]
+
     return render_template("report.html", report=report_data, substance_name=substance)
 
 
