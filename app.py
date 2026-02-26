@@ -3,7 +3,7 @@
 import threading
 import time
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 from flask_socketio import SocketIO, emit
 
 from scraper import erowid, psychonaut, psychonautwiki
@@ -16,6 +16,7 @@ from cache.manager import (
     is_report_cached,
     get_cached_report_ids,
 )
+from tts.engine import generate_tts, get_voices, VOICES
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "tripreport-secret-key"
@@ -89,6 +90,42 @@ def api_substance(name: str):
 def api_substances():
     """API endpoint to list all cached substances."""
     return jsonify(get_cached_substances())
+
+
+# ─── TTS API ─────────────────────────────────────────────────────────────────
+
+
+@app.route("/api/tts/voices")
+def api_tts_voices():
+    """Return available TTS voices."""
+    return jsonify(get_voices())
+
+
+@app.route("/api/tts/<substance>/<report_id>")
+def api_tts_audio(substance: str, report_id: str):
+    """Generate and serve TTS audio for a report.
+
+    Query params:
+        voice: voice key (default: "denise")
+    """
+    voice_key = request.args.get("voice", "denise")
+    if voice_key not in VOICES:
+        voice_key = "denise"
+
+    report_data = get_report(substance, report_id)
+    if not report_data:
+        return jsonify({"error": "Rapport introuvable"}), 404
+
+    # Use translated body if available, otherwise original
+    text = report_data.get("body_translated") or report_data.get("body_original", "")
+    if not text.strip():
+        return jsonify({"error": "Aucun contenu textuel"}), 400
+
+    audio_path = generate_tts(text, voice_key)
+    if not audio_path:
+        return jsonify({"error": "Erreur lors de la génération audio"}), 500
+
+    return send_file(audio_path, mimetype="audio/mpeg")
 
 
 # ─── WebSocket Events ────────────────────────────────────────────────────────
