@@ -293,30 +293,95 @@
     }
 
     /**
+     * Check if a substance name matches the searched substance.
+     * Handles case-insensitive comparison and common name variations.
+     */
+    function isMatchingSubstance(substanceName, searchedName) {
+        if (!substanceName || !searchedName) return false;
+        var a = substanceName.toLowerCase().trim();
+        var b = searchedName.toLowerCase().trim();
+        if (a === b) return true;
+        // Check if one contains the other (e.g. "4-HO-MET (Metocin)" matches "4-HO-MET")
+        if (a.indexOf(b) !== -1 || b.indexOf(a) !== -1) return true;
+        // Normalize: remove hyphens, spaces, dots for comparison
+        var normA = a.replace(/[-\s.()]/g, "");
+        var normB = b.replace(/[-\s.()]/g, "");
+        if (normA === normB) return true;
+        if (normA.indexOf(normB) !== -1 || normB.indexOf(normA) !== -1) return true;
+        return false;
+    }
+
+    /**
+     * Normalize a route of administration string.
+     * Handles multi-word routes, aliases, and common variations.
+     */
+    function normalizeRoute(routeStr) {
+        var ROUTE_ALIASES = {
+            "insufflated": "insufflated",
+            "snorted": "insufflated",
+            "nasal": "insufflated",
+            "intranasal": "insufflated",
+            "oral": "oral",
+            "eaten": "oral",
+            "swallowed": "oral",
+            "smoked": "smoked",
+            "inhaled": "inhaled",
+            "vapourized": "inhaled",
+            "vaporized": "inhaled",
+            "sublingual": "sublingual",
+            "buccal": "sublingual",
+            "im": "IM",
+            "intramuscular": "IM",
+            "iv": "IV",
+            "intravenous": "IV",
+            "iv drip": "IV",
+            "rectal": "rectal",
+            "plugged": "rectal",
+            "transdermal": "transdermal",
+            "topical": "transdermal",
+            "subcutaneous": "subcutaneous"
+        };
+        var route = routeStr.trim().toLowerCase();
+        return ROUTE_ALIASES[route] || route;
+    }
+
+    /**
      * Compute dosage stats grouped by route of administration.
-     * Returns an object: { route: { unit, min, max, avg, count } }
+     * Only includes dosages for the searched substance (SUBSTANCE_NAME),
+     * not combo substances.
+     * Returns an array: [{ route, unit, min, max, avg, count }]
      */
     function computeDosageStats() {
         // Group doses by route + unit
         var groups = {};
+        var targetSubstance = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
 
         allReports.forEach(function (r) {
             if (!r.substances || r.substances.length === 0) return;
             r.substances.forEach(function (s) {
-                var route = (s.route || "").trim().toLowerCase();
-                if (!route) return;
+                // Only include dosages for the searched substance
+                if (targetSubstance && !isMatchingSubstance(s.name, targetSubstance)) return;
+
+                var rawRoute = (s.route || "").trim().toLowerCase();
+                if (!rawRoute) return;
                 var parsed = parseDose(s.dose);
                 if (!parsed) return;
 
-                var key = route + "|" + parsed.unit;
-                if (!groups[key]) {
-                    groups[key] = {
-                        route: route,
-                        unit: parsed.unit,
-                        values: []
-                    };
-                }
-                groups[key].values.push(parsed.value);
+                // Split compound routes (e.g. "oral\nrectal" or "buccal sublingual")
+                // and process each one individually
+                var routeParts = rawRoute.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
+                routeParts.forEach(function (part) {
+                    var route = normalizeRoute(part);
+                    var key = route + "|" + parsed.unit;
+                    if (!groups[key]) {
+                        groups[key] = {
+                            route: route,
+                            unit: parsed.unit,
+                            values: []
+                        };
+                    }
+                    groups[key].values.push(parsed.value);
+                });
             });
         });
 
