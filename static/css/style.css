@@ -866,6 +866,41 @@ a:hover {
     max-width: 160px;
 }
 
+.tts-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    min-width: 90px;
+    text-align: center;
+}
+
+/* Loading spinner on play button */
+.tts-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.tts-loading::after {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: tts-spin 0.8s linear infinite;
+}
+
+@keyframes tts-spin {
+    to { transform: rotate(360deg); }
+}
+
+#ttsAudio {
+    display: none;
+}
+
 /* Add bottom padding to report page to avoid content hidden behind the player */
 .report-page {
     padding-bottom: 5rem;
@@ -961,5 +996,11 @@ a:hover {
     .tts-progress-wrapper {
         order: 5;
         width: 100%;
+    }
+
+    .tts-time {
+        order: 6;
+        width: 100%;
+        text-align: left;
     }
 }
