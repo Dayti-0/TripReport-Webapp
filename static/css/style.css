@@ -897,6 +897,31 @@ a:hover {
     to { transform: rotate(360deg); }
 }
 
+/* Karaoke toggle button */
+.tts-btn-karaoke {
+    opacity: 0.5;
+    transition: opacity 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.tts-btn-karaoke-active {
+    opacity: 1;
+    border-color: var(--green);
+    background: rgba(93, 145, 82, 0.15);
+}
+
+/* Karaoke word highlighting */
+.kw {
+    transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
+.kw-active {
+    background-color: rgba(93, 145, 82, 0.35);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(93, 145, 82, 0.25);
+}
+
 #ttsAudio {
     display: none;
 }

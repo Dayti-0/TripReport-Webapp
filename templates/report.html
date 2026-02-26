@@ -116,6 +116,9 @@
                     <label for="ttsVoice" class="tts-speed-label">Voix</label>
                     <select id="ttsVoice" class="tts-speed-select"></select>
                 </div>
+                <button id="ttsKaraokeToggle" class="tts-btn tts-btn-karaoke" title="Karaoké (surligner le texte)">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
+                </button>
             </div>
             <audio id="ttsAudio" preload="none"></audio>
         </div>
@@ -143,6 +146,7 @@
 
             // ─── TTS Audio Player (edge-tts backend) ───────────────────────
             var substance = {{ substance_name | tojson }};
+            var rawText = {{ (report.body_translated or report.body_original or '') | tojson }};
             var audio = document.getElementById("ttsAudio");
             var btnPlayPause = document.getElementById("ttsPlayPause");
             var btnStop = document.getElementById("ttsStop");
@@ -154,9 +158,20 @@
             var timeDisplay = document.getElementById("ttsTime");
             var speedSelect = document.getElementById("ttsSpeed");
             var voiceSelect = document.getElementById("ttsVoice");
+            var btnKaraoke = document.getElementById("ttsKaraokeToggle");
 
             var isLoading = false;
             var currentVoice = "denise";
+
+            // ─── Karaoke state ──────────────────────────────────────────────
+            var karaokeEnabled = true;
+            var karaokeReady = false;
+            var karaokeTimings = null;   // [{t, d, w}, ...]
+            var karaokeSpans = [];       // DOM spans in order
+            var karaokeActiveIdx = -1;
+            var originalBodyHTML = null; // to restore when disabling
+
+            btnKaraoke.classList.add("tts-btn-karaoke-active");
 
             // Format seconds as mm:ss
             function formatTime(s) {
@@ -164,6 +179,177 @@
                 var m = Math.floor(s / 60);
                 var sec = Math.floor(s % 60);
                 return (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+            }
+
+            // Escape HTML entities
+            function escapeHtml(str) {
+                var d = document.createElement("div");
+                d.appendChild(document.createTextNode(str));
+                return d.innerHTML;
+            }
+
+            // ─── Karaoke: build highlighted spans from timings ──────────────
+            function setupKaraoke(timings) {
+                var reportBody = document.querySelector('.report-body');
+                if (!reportBody || !timings || !timings.length) return;
+
+                // Save original HTML so we can restore it
+                if (originalBodyHTML === null) {
+                    originalBodyHTML = reportBody.innerHTML;
+                }
+
+                // Build HTML by matching timing words to the raw text
+                var html = '';
+                var searchPos = 0;
+                var text = rawText;
+
+                for (var i = 0; i < timings.length; i++) {
+                    var word = timings[i].w;
+                    var idx = text.indexOf(word, searchPos);
+
+                    if (idx === -1) {
+                        // Try case-insensitive search nearby
+                        var lowerWord = word.toLowerCase();
+                        var found = false;
+                        for (var j = searchPos; j < Math.min(searchPos + 100, text.length); j++) {
+                            if (text.substring(j, j + word.length).toLowerCase() === lowerWord) {
+                                idx = j;
+                                word = text.substring(j, j + word.length);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            // Skip this timing entry — word not found in text
+                            continue;
+                        }
+                    }
+
+                    // Add text between previous word and this one
+                    if (idx > searchPos) {
+                        var between = text.substring(searchPos, idx);
+                        html += escapeHtml(between).replace(/\n/g, '<br>');
+                    }
+
+                    // Add word wrapped in a karaoke span
+                    html += '<span class="kw" data-ki="' + i + '">' + escapeHtml(word) + '</span>';
+                    searchPos = idx + word.length;
+                }
+
+                // Add any remaining text after the last word
+                if (searchPos < text.length) {
+                    html += escapeHtml(text.substring(searchPos)).replace(/\n/g, '<br>');
+                }
+
+                reportBody.innerHTML = html;
+
+                // Collect all karaoke word spans
+                karaokeSpans = [];
+                var spans = reportBody.querySelectorAll('.kw');
+                for (var k = 0; k < spans.length; k++) {
+                    karaokeSpans.push(spans[k]);
+                }
+
+                karaokeReady = true;
+            }
+
+            function teardownKaraoke() {
+                if (originalBodyHTML !== null) {
+                    var reportBody = document.querySelector('.report-body');
+                    if (reportBody) reportBody.innerHTML = originalBodyHTML;
+                }
+                karaokeReady = false;
+                karaokeSpans = [];
+                karaokeActiveIdx = -1;
+            }
+
+            // ─── Karaoke: highlight active word during playback ─────────────
+            function updateKaraoke(currentTime) {
+                if (!karaokeReady || !karaokeTimings || !karaokeSpans.length) return;
+
+                // Binary search for the active timing entry
+                var timings = karaokeTimings;
+                var lo = 0, hi = timings.length - 1;
+                var activeIdx = -1;
+
+                while (lo <= hi) {
+                    var mid = (lo + hi) >> 1;
+                    if (timings[mid].t <= currentTime) {
+                        activeIdx = mid;
+                        lo = mid + 1;
+                    } else {
+                        hi = mid - 1;
+                    }
+                }
+
+                // Check that we're still within this word's duration
+                if (activeIdx >= 0 && currentTime > timings[activeIdx].t + timings[activeIdx].d + 0.15) {
+                    // Between words — keep the last word highlighted briefly
+                }
+
+                if (activeIdx === karaokeActiveIdx) return;
+
+                // Remove previous highlight
+                if (karaokeActiveIdx >= 0) {
+                    var prevSpan = document.querySelector('.kw[data-ki="' + karaokeActiveIdx + '"]');
+                    if (prevSpan) prevSpan.classList.remove('kw-active');
+                }
+
+                karaokeActiveIdx = activeIdx;
+
+                // Add new highlight
+                if (activeIdx >= 0) {
+                    var span = document.querySelector('.kw[data-ki="' + activeIdx + '"]');
+                    if (span) {
+                        span.classList.add('kw-active');
+                        // Auto-scroll to keep the active word visible
+                        var rect = span.getBoundingClientRect();
+                        var viewH = window.innerHeight;
+                        if (rect.top < 80 || rect.bottom > viewH - 100) {
+                            span.scrollIntoView({behavior: 'smooth', block: 'center'});
+                        }
+                    }
+                }
+            }
+
+            function clearKaraokeHighlight() {
+                if (karaokeActiveIdx >= 0) {
+                    var prev = document.querySelector('.kw[data-ki="' + karaokeActiveIdx + '"]');
+                    if (prev) prev.classList.remove('kw-active');
+                    karaokeActiveIdx = -1;
+                }
+            }
+
+            // ─── Karaoke toggle button ──────────────────────────────────────
+            btnKaraoke.addEventListener("click", function() {
+                karaokeEnabled = !karaokeEnabled;
+                if (karaokeEnabled) {
+                    btnKaraoke.classList.add("tts-btn-karaoke-active");
+                    // Re-setup if we have timings
+                    if (karaokeTimings) setupKaraoke(karaokeTimings);
+                } else {
+                    btnKaraoke.classList.remove("tts-btn-karaoke-active");
+                    teardownKaraoke();
+                }
+            });
+
+            // ─── Fetch timings from backend ─────────────────────────────────
+            function fetchTimings() {
+                var url = "/api/tts/" + encodeURIComponent(substance) +
+                          "/" + encodeURIComponent(reportId) +
+                          "/timings?voice=" + encodeURIComponent(currentVoice);
+
+                fetch(url)
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        if (Array.isArray(data) && data.length > 0) {
+                            karaokeTimings = data;
+                            if (karaokeEnabled) setupKaraoke(data);
+                        }
+                    })
+                    .catch(function(e) {
+                        console.warn("Karaoke timings unavailable:", e);
+                    });
             }
 
             // Load available voices from backend
@@ -182,7 +368,6 @@
                     })
                     .catch(function(e) {
                         console.error("Failed to load voices:", e);
-                        // Fallback: add default voices manually
                         var defaults = [
                             {key: "denise", label: "Denise (femme)"},
                             {key: "henri", label: "Henri (homme)"}
@@ -215,7 +400,6 @@
                 iconPlay.style.display = "none";
                 iconPause.style.display = "none";
 
-                // Show a loading spinner via CSS class
                 btnPlayPause.classList.add("tts-loading");
 
                 audio.src = getAudioUrl();
@@ -227,6 +411,8 @@
                     progressText.textContent = "Prêt";
                     iconPlay.style.display = "block";
                     iconPause.style.display = "none";
+                    // Fetch karaoke timings once audio is ready
+                    fetchTimings();
                     if (andPlay) {
                         audio.playbackRate = parseFloat(speedSelect.value);
                         audio.play();
@@ -242,12 +428,14 @@
                 };
             }
 
-            // Update progress bar during playback
+            // Update progress bar + karaoke during playback
             audio.addEventListener("timeupdate", function() {
                 if (audio.duration && isFinite(audio.duration)) {
                     var pct = (audio.currentTime / audio.duration) * 100;
                     progressFill.style.width = pct + "%";
                     timeDisplay.textContent = formatTime(audio.currentTime) + " / " + formatTime(audio.duration);
+                    // Update karaoke highlighting
+                    if (karaokeEnabled) updateKaraoke(audio.currentTime);
                 }
             });
 
@@ -270,6 +458,7 @@
                 iconPause.style.display = "none";
                 progressFill.style.width = "100%";
                 progressText.textContent = "Terminé";
+                clearKaraokeHighlight();
             });
 
             // Play/Pause toggle
@@ -277,7 +466,6 @@
                 if (isLoading) return;
 
                 if (!audio.src || audio.src === window.location.href) {
-                    // First play - load and play
                     loadAudio(true);
                 } else if (audio.paused || audio.ended) {
                     if (audio.ended) {
@@ -299,6 +487,7 @@
                 timeDisplay.textContent = "";
                 iconPlay.style.display = "block";
                 iconPause.style.display = "none";
+                clearKaraokeHighlight();
             });
 
             // Speed change
@@ -325,6 +514,10 @@
                 audio.removeAttribute("src");
                 progressFill.style.width = "0%";
                 timeDisplay.textContent = "";
+                // Reset karaoke for new voice (timings will differ)
+                karaokeTimings = null;
+                karaokeReady = false;
+                clearKaraokeHighlight();
 
                 if (wasPlaying) {
                     loadAudio(true);
@@ -333,6 +526,23 @@
                     iconPlay.style.display = "block";
                     iconPause.style.display = "none";
                 }
+            });
+
+            // ─── Stop audio when leaving the page ───────────────────────────
+            window.addEventListener("beforeunload", function() {
+                audio.pause();
+                audio.src = "";
+            });
+
+            window.addEventListener("pagehide", function() {
+                audio.pause();
+                audio.src = "";
+            });
+
+            // Also handle SPA-style navigation (back button, etc.)
+            window.addEventListener("popstate", function() {
+                audio.pause();
+                audio.src = "";
             });
         })();
     </script>
