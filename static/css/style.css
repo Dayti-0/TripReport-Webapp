@@ -371,6 +371,69 @@ a:hover {
     letter-spacing: 1px;
 }
 
+/* Dosage stats */
+.dosage-stats {
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+.dosage-stats-title {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.75rem;
+}
+
+.dosage-stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.dosage-row {
+    display: flex;
+    align-items: baseline;
+    gap: 1.2rem;
+    padding: 0.35rem 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    flex-wrap: wrap;
+}
+
+.dosage-route {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--beige);
+    min-width: 100px;
+}
+
+.dosage-detail {
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.dosage-label {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dosage-value {
+    color: var(--yellow);
+    font-weight: 500;
+}
+
+.dosage-count {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
 /* Layout */
 .substance-layout {
     display: flex;
@@ -1013,6 +1076,19 @@ a:hover {
     .stats-bar {
         gap: 1rem;
         padding: 0.75rem 1rem;
+    }
+
+    .dosage-stats {
+        padding: 0.75rem 1rem;
+    }
+
+    .dosage-row {
+        gap: 0.6rem;
+    }
+
+    .dosage-route {
+        min-width: 70px;
+        font-size: 0.75rem;
     }
 
     .tts-player-inner {
