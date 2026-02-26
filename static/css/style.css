@@ -744,6 +744,146 @@ a:hover {
     margin-bottom: 1.5rem;
 }
 
+/* ─── TTS Audio Player ────────────────────────────────────────────────────── */
+
+.tts-player {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    padding: 0.6rem 1.5rem;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.tts-player-inner {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.tts-controls {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+
+.tts-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.tts-btn:hover {
+    border-color: var(--green);
+    background: rgba(93, 145, 82, 0.1);
+}
+
+.tts-btn-play {
+    width: 40px;
+    height: 40px;
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+}
+
+.tts-btn-play:hover {
+    background: var(--green-dim);
+    border-color: var(--green-dim);
+}
+
+.tts-progress-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.tts-progress-bar {
+    height: 4px;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.3rem;
+    cursor: pointer;
+}
+
+.tts-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--green), var(--blue));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.tts-progress-text {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.tts-speed,
+.tts-voice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    flex-shrink: 0;
+}
+
+.tts-speed-label {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tts-speed-select {
+    padding: 0.25rem 0.4rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    outline: none;
+    cursor: pointer;
+}
+
+.tts-speed-select:focus {
+    border-color: var(--green);
+}
+
+.tts-voice .tts-speed-select {
+    max-width: 160px;
+}
+
+/* Add bottom padding to report page to avoid content hidden behind the player */
+.report-page {
+    padding-bottom: 5rem;
+}
+
+/* ─── Read badge clickable ────────────────────────────────────────────────── */
+
+.card-read-badge {
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.card-read-badge:hover {
+    background: rgba(209, 105, 105, 0.15);
+    color: var(--red);
+    border-color: rgba(209, 105, 105, 0.3);
+}
+
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
@@ -807,5 +947,19 @@ a:hover {
     .stats-bar {
         gap: 1rem;
         padding: 0.75rem 1rem;
+    }
+
+    .tts-player-inner {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .tts-voice .tts-speed-select {
+        max-width: 120px;
+    }
+
+    .tts-progress-wrapper {
+        order: 5;
+        width: 100%;
     }
 }
