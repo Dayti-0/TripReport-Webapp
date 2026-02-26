@@ -80,6 +80,42 @@
             </div>
             {% endif %}
         </article>
+
+        <!-- Audio Player (TTS) -->
+        <div id="ttsPlayer" class="tts-player">
+            <div class="tts-player-inner">
+                <div class="tts-controls">
+                    <button id="ttsPlayPause" class="tts-btn tts-btn-play" title="Lecture / Pause">
+                        <svg id="ttsIconPlay" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="ttsIconPause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button id="ttsStop" class="tts-btn" title="Stop">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
+                    </button>
+                </div>
+                <div class="tts-progress-wrapper">
+                    <div class="tts-progress-bar" id="ttsProgressBar">
+                        <div class="tts-progress-fill" id="ttsProgressFill"></div>
+                    </div>
+                    <span class="tts-progress-text" id="ttsProgressText">Pr&ecirc;t</span>
+                </div>
+                <div class="tts-speed">
+                    <label for="ttsSpeed" class="tts-speed-label">Vitesse</label>
+                    <select id="ttsSpeed" class="tts-speed-select">
+                        <option value="0.7">0.7x</option>
+                        <option value="0.85">0.85x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.15">1.15x</option>
+                        <option value="1.3">1.3x</option>
+                        <option value="1.5">1.5x</option>
+                    </select>
+                </div>
+                <div class="tts-voice">
+                    <label for="ttsVoice" class="tts-speed-label">Voix</label>
+                    <select id="ttsVoice" class="tts-speed-select"></select>
+                </div>
+            </div>
+        </div>
         {% else %}
         <div class="not-found">
             <h2>Rapport introuvable</h2>
@@ -92,6 +128,7 @@
     {% if report %}
     <script>
         (function() {
+            // ─── Mark as read ───────────────────────────────────────────────
             var reportId = {{ report.id | tojson }};
             if (reportId) {
                 var readReports = JSON.parse(localStorage.getItem("readReports") || "[]");
@@ -100,6 +137,194 @@
                     localStorage.setItem("readReports", JSON.stringify(readReports));
                 }
             }
+
+            // ─── TTS Audio Player ───────────────────────────────────────────
+            var synth = window.speechSynthesis;
+            if (!synth) return;
+
+            var btnPlayPause = document.getElementById("ttsPlayPause");
+            var btnStop = document.getElementById("ttsStop");
+            var iconPlay = document.getElementById("ttsIconPlay");
+            var iconPause = document.getElementById("ttsIconPause");
+            var progressFill = document.getElementById("ttsProgressFill");
+            var progressText = document.getElementById("ttsProgressText");
+            var speedSelect = document.getElementById("ttsSpeed");
+            var voiceSelect = document.getElementById("ttsVoice");
+
+            var chunks = [];
+            var currentChunk = 0;
+            var isPlaying = false;
+            var isPaused = false;
+            var currentUtterance = null;
+
+            // Extract text from report body
+            var bodyEl = document.querySelector(".report-body");
+            var fullText = bodyEl ? bodyEl.innerText.trim() : "";
+
+            // Split text into chunks at paragraph boundaries (~800 chars max)
+            function splitText(text) {
+                var parts = [];
+                var paragraphs = text.split(/\n\s*\n|\n/);
+                var current = "";
+                for (var i = 0; i < paragraphs.length; i++) {
+                    var p = paragraphs[i].trim();
+                    if (!p) continue;
+                    if (current.length + p.length > 800 && current.length > 0) {
+                        parts.push(current.trim());
+                        current = p;
+                    } else {
+                        current += (current ? "\n" : "") + p;
+                    }
+                }
+                if (current.trim()) parts.push(current.trim());
+                return parts.length > 0 ? parts : [text];
+            }
+
+            chunks = splitText(fullText);
+
+            // Populate voice selector
+            function loadVoices() {
+                var voices = synth.getVoices();
+                voiceSelect.innerHTML = "";
+                // Prefer French voices, then show all
+                var frVoices = [];
+                var otherVoices = [];
+                voices.forEach(function(v) {
+                    if (v.lang && v.lang.toLowerCase().startsWith("fr")) {
+                        frVoices.push(v);
+                    } else {
+                        otherVoices.push(v);
+                    }
+                });
+                var allSorted = frVoices.concat(otherVoices);
+                allSorted.forEach(function(v, i) {
+                    var opt = document.createElement("option");
+                    opt.value = i < frVoices.length ? i : frVoices.length + (i - frVoices.length);
+                    opt.textContent = v.name.substring(0, 30) + " (" + v.lang + ")";
+                    opt.setAttribute("data-voice-index", voices.indexOf(v));
+                    voiceSelect.appendChild(opt);
+                });
+            }
+
+            loadVoices();
+            if (synth.onvoiceschanged !== undefined) {
+                synth.onvoiceschanged = loadVoices;
+            }
+
+            function getSelectedVoice() {
+                var selected = voiceSelect.selectedOptions[0];
+                if (!selected) return null;
+                var idx = parseInt(selected.getAttribute("data-voice-index"), 10);
+                var voices = synth.getVoices();
+                return voices[idx] || null;
+            }
+
+            function updateProgress() {
+                var pct = chunks.length > 0 ? Math.round(((currentChunk) / chunks.length) * 100) : 0;
+                progressFill.style.width = pct + "%";
+                progressText.textContent = "Partie " + (currentChunk) + "/" + chunks.length;
+            }
+
+            function speakChunk(index) {
+                if (index >= chunks.length) {
+                    stopSpeech();
+                    progressFill.style.width = "100%";
+                    progressText.textContent = "Termin\u00e9";
+                    return;
+                }
+                currentChunk = index;
+                var utt = new SpeechSynthesisUtterance(chunks[index]);
+                utt.rate = parseFloat(speedSelect.value);
+                utt.pitch = 1;
+                var voice = getSelectedVoice();
+                if (voice) utt.voice = voice;
+                utt.onstart = function() {
+                    currentChunk = index + 1;
+                    updateProgress();
+                };
+                utt.onend = function() {
+                    if (isPlaying && !isPaused) {
+                        speakChunk(index + 1);
+                    }
+                };
+                utt.onerror = function(e) {
+                    if (e.error !== "canceled") {
+                        console.error("TTS error:", e.error);
+                        speakChunk(index + 1);
+                    }
+                };
+                currentUtterance = utt;
+                synth.speak(utt);
+            }
+
+            function playSpeech() {
+                if (isPaused) {
+                    synth.resume();
+                    isPaused = false;
+                } else {
+                    synth.cancel();
+                    isPlaying = true;
+                    speakChunk(currentChunk > 0 && currentChunk < chunks.length ? currentChunk - 1 : 0);
+                }
+                isPlaying = true;
+                iconPlay.style.display = "none";
+                iconPause.style.display = "block";
+            }
+
+            function pauseSpeech() {
+                synth.pause();
+                isPaused = true;
+                isPlaying = false;
+                iconPlay.style.display = "block";
+                iconPause.style.display = "none";
+            }
+
+            function stopSpeech() {
+                synth.cancel();
+                isPlaying = false;
+                isPaused = false;
+                currentChunk = 0;
+                currentUtterance = null;
+                iconPlay.style.display = "block";
+                iconPause.style.display = "none";
+                progressFill.style.width = "0%";
+                progressText.textContent = "Pr\u00eat";
+            }
+
+            btnPlayPause.addEventListener("click", function() {
+                if (isPlaying && !isPaused) {
+                    pauseSpeech();
+                } else {
+                    playSpeech();
+                }
+            });
+
+            btnStop.addEventListener("click", stopSpeech);
+
+            // Speed change while playing
+            speedSelect.addEventListener("change", function() {
+                if (isPlaying) {
+                    var resumeAt = currentChunk > 0 ? currentChunk - 1 : 0;
+                    synth.cancel();
+                    isPaused = false;
+                    speakChunk(resumeAt);
+                }
+            });
+
+            // Voice change while playing
+            voiceSelect.addEventListener("change", function() {
+                if (isPlaying) {
+                    var resumeAt = currentChunk > 0 ? currentChunk - 1 : 0;
+                    synth.cancel();
+                    isPaused = false;
+                    speakChunk(resumeAt);
+                }
+            });
+
+            // Cleanup on page leave
+            window.addEventListener("beforeunload", function() {
+                synth.cancel();
+            });
         })();
     </script>
     {% endif %}

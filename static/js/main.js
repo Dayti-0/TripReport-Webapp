@@ -199,7 +199,7 @@
         }
 
         card.innerHTML =
-            (isRead ? '<span class="card-read-badge">D\u00e9j\u00e0 lu</span>' : '') +
+            (isRead ? '<span class="card-read-badge" title="Cliquer pour retirer" data-report-id="' + escapeHtml(report.id) + '">D\u00e9j\u00e0 lu &times;</span>' : '') +
             '<div class="card-title">' + escapeHtml(report.title_translated || report.title) + '</div>' +
             '<div class="card-meta">' +
                 escapeHtml(report.author || "Anonyme") +
@@ -219,6 +219,24 @@
                 '<a href="/report/' + encodeURIComponent(SUBSTANCE_NAME) + '/' +
                     encodeURIComponent(report.id) + '" class="card-link">Lire &rarr;</a>' +
             '</div>';
+
+        // Make read badge clickable to unmark
+        if (isRead) {
+            var badge = card.querySelector(".card-read-badge");
+            badge.addEventListener("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var rid = this.getAttribute("data-report-id");
+                var idx = readReports.indexOf(rid);
+                if (idx !== -1) {
+                    readReports.splice(idx, 1);
+                    localStorage.setItem("readReports", JSON.stringify(readReports));
+                }
+                // Remove badge and read styling from card
+                this.parentElement.classList.remove("report-read");
+                this.remove();
+            });
+        }
 
         return card;
     }
