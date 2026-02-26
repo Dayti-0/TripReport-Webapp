@@ -270,6 +270,130 @@
         document.getElementById("statSolo").textContent = solo;
         document.getElementById("statCombo").textContent = combo;
         document.getElementById("statDisplayed").textContent = total;
+
+        renderDosageStats();
+    }
+
+    // ─── Dosage Stats ─────────────────────────────────────────────────────────
+
+    /**
+     * Parse a dose string like "20 mg", "3.5g", "200 ug" into {value, unit}.
+     * Returns null if unparseable.
+     */
+    function parseDose(doseStr) {
+        if (!doseStr) return null;
+        var match = doseStr.match(/^[\s]*([\d]+(?:[.,]\d+)?)\s*(mg|g|ug|µg|ml|mcg)\b/i);
+        if (!match) return null;
+        var value = parseFloat(match[1].replace(",", "."));
+        if (isNaN(value) || value <= 0) return null;
+        var unit = match[2].toLowerCase();
+        // Normalize µg and mcg to ug
+        if (unit === "µg" || unit === "mcg") unit = "ug";
+        return { value: value, unit: unit };
+    }
+
+    /**
+     * Compute dosage stats grouped by route of administration.
+     * Returns an object: { route: { unit, min, max, avg, count } }
+     */
+    function computeDosageStats() {
+        // Group doses by route + unit
+        var groups = {};
+
+        allReports.forEach(function (r) {
+            if (!r.substances || r.substances.length === 0) return;
+            r.substances.forEach(function (s) {
+                var route = (s.route || "").trim().toLowerCase();
+                if (!route) return;
+                var parsed = parseDose(s.dose);
+                if (!parsed) return;
+
+                var key = route + "|" + parsed.unit;
+                if (!groups[key]) {
+                    groups[key] = {
+                        route: route,
+                        unit: parsed.unit,
+                        values: []
+                    };
+                }
+                groups[key].values.push(parsed.value);
+            });
+        });
+
+        // Compute min/avg/max for each group
+        var results = [];
+        Object.keys(groups).forEach(function (key) {
+            var g = groups[key];
+            var vals = g.values;
+            vals.sort(function (a, b) { return a - b; });
+            var sum = vals.reduce(function (acc, v) { return acc + v; }, 0);
+            results.push({
+                route: g.route,
+                unit: g.unit,
+                count: vals.length,
+                min: vals[0],
+                max: vals[vals.length - 1],
+                avg: sum / vals.length
+            });
+        });
+
+        // Sort by count descending
+        results.sort(function (a, b) { return b.count - a.count; });
+        return results;
+    }
+
+    /**
+     * Format a numeric dose value for display (remove trailing zeros).
+     */
+    function formatDose(value, unit) {
+        var str;
+        if (value >= 100) {
+            str = Math.round(value).toString();
+        } else if (value >= 10) {
+            str = value.toFixed(1).replace(/\.0$/, "");
+        } else {
+            str = value.toFixed(2).replace(/\.?0+$/, "");
+        }
+        return str + " " + unit;
+    }
+
+    /**
+     * Render dosage stats into the #dosageStats container.
+     */
+    function renderDosageStats() {
+        var container = document.getElementById("dosageStats");
+        var grid = document.getElementById("dosageStatsGrid");
+        if (!container || !grid) return;
+
+        var stats = computeDosageStats();
+        if (stats.length === 0) {
+            container.style.display = "none";
+            return;
+        }
+
+        container.style.display = "block";
+        grid.innerHTML = "";
+
+        stats.forEach(function (s) {
+            var row = document.createElement("div");
+            row.className = "dosage-row";
+            row.innerHTML =
+                '<span class="dosage-route">' + escapeHtml(s.route) + '</span>' +
+                '<span class="dosage-detail">' +
+                    '<span class="dosage-label">min</span> ' +
+                    '<span class="dosage-value">' + escapeHtml(formatDose(s.min, s.unit)) + '</span>' +
+                '</span>' +
+                '<span class="dosage-detail">' +
+                    '<span class="dosage-label">moy</span> ' +
+                    '<span class="dosage-value">' + escapeHtml(formatDose(s.avg, s.unit)) + '</span>' +
+                '</span>' +
+                '<span class="dosage-detail">' +
+                    '<span class="dosage-label">max</span> ' +
+                    '<span class="dosage-value">' + escapeHtml(formatDose(s.max, s.unit)) + '</span>' +
+                '</span>' +
+                '<span class="dosage-count">(' + s.count + ')</span>';
+            grid.appendChild(row);
+        });
     }
 
     // ─── Filters ─────────────────────────────────────────────────────────────
