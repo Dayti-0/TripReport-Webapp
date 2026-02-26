@@ -16,7 +16,7 @@ from cache.manager import (
     is_report_cached,
     get_cached_report_ids,
 )
-from tts.engine import generate_tts, get_voices, VOICES
+from tts.engine import generate_tts, get_timings, get_voices, VOICES
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "tripreport-secret-key"
@@ -126,6 +126,32 @@ def api_tts_audio(substance: str, report_id: str):
         return jsonify({"error": "Erreur lors de la génération audio"}), 500
 
     return send_file(audio_path, mimetype="audio/mpeg")
+
+
+@app.route("/api/tts/<substance>/<report_id>/timings")
+def api_tts_timings(substance: str, report_id: str):
+    """Return word boundary timings for karaoke-style highlighting.
+
+    Query params:
+        voice: voice key (default: "denise")
+    """
+    voice_key = request.args.get("voice", "denise")
+    if voice_key not in VOICES:
+        voice_key = "denise"
+
+    report_data = get_report(substance, report_id)
+    if not report_data:
+        return jsonify({"error": "Rapport introuvable"}), 404
+
+    text = report_data.get("body_translated") or report_data.get("body_original", "")
+    if not text.strip():
+        return jsonify({"error": "Aucun contenu textuel"}), 400
+
+    timings = get_timings(text, voice_key)
+    if timings is None:
+        return jsonify({"error": "Impossible de générer les timings"}), 500
+
+    return jsonify(timings)
 
 
 # ─── WebSocket Events ────────────────────────────────────────────────────────
