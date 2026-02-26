@@ -174,11 +174,23 @@
         var card = document.createElement("div");
         card.className = "report-card";
 
-        // Substances text
+        // Substances text (with dosage info)
         var substancesHtml = "";
         if (report.substances && report.substances.length > 0) {
             substancesHtml = report.substances.map(function (s) {
-                return '<span class="substance-tag">' + escapeHtml(s.name) + '</span>';
+                var label = s.name;
+                var doseInfo = "";
+                if (s.dose) {
+                    doseInfo += s.dose;
+                }
+                if (s.route) {
+                    doseInfo += (doseInfo ? ", " : "") + s.route;
+                }
+                if (doseInfo) {
+                    return '<span class="substance-tag">' + escapeHtml(label) +
+                        ' <span class="substance-dose">' + escapeHtml(doseInfo) + '</span></span>';
+                }
+                return '<span class="substance-tag">' + escapeHtml(label) + '</span>';
             }).join("");
         } else if (report.substances_text) {
             substancesHtml = '<span class="substance-tag">' + escapeHtml(report.substances_text) + '</span>';
