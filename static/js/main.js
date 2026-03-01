@@ -31,6 +31,8 @@
     const filterSolo = document.getElementById("filterSolo");
     const filterCombo = document.getElementById("filterCombo");
     const filterSource = document.getElementById("filterSource");
+    const filterRouteGroup = document.getElementById("filterRouteGroup");
+    const filterRouteContainer = document.getElementById("filterRouteContainer");
     const filterReset = document.getElementById("filterReset");
 
     // ─── Initialization ──────────────────────────────────────────────────────
@@ -39,6 +41,7 @@
         // Load cached reports if available
         if (typeof CACHED_INDEX !== "undefined" && CACHED_INDEX && CACHED_INDEX.reports) {
             allReports = CACHED_INDEX.reports;
+            buildRouteCheckboxes();
             renderReports();
             updateStats();
         }
@@ -110,6 +113,7 @@
             if (!exists) {
                 allReports.push(report);
             }
+            buildRouteCheckboxes();
             renderReports();
             updateStats();
         });
@@ -127,6 +131,7 @@
                 .then(function (index) {
                     if (index.reports && index.reports.length > 0) {
                         allReports = index.reports;
+                        buildRouteCheckboxes();
                         renderReports();
                         updateStats();
                     }
@@ -585,6 +590,68 @@
 
     // ─── Filters ─────────────────────────────────────────────────────────────
 
+    /**
+     * Build route-of-administration checkboxes dynamically from available reports.
+     */
+    function buildRouteCheckboxes() {
+        if (!filterRouteContainer || !filterRouteGroup) return;
+
+        var routeSet = {};
+        allReports.forEach(function (r) {
+            if (!r.substances) return;
+            r.substances.forEach(function (s) {
+                if (!s.route) return;
+                var parts = s.route.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
+                parts.forEach(function (part) {
+                    var normalized = normalizeRoute(part);
+                    if (normalized) routeSet[normalized] = true;
+                });
+            });
+        });
+
+        var routes = Object.keys(routeSet).sort();
+        if (routes.length === 0) {
+            filterRouteGroup.style.display = "none";
+            return;
+        }
+
+        // Preserve currently checked routes
+        var previouslyChecked = {};
+        var existing = filterRouteContainer.querySelectorAll("input[type=checkbox]");
+        for (var i = 0; i < existing.length; i++) {
+            if (existing[i].checked) previouslyChecked[existing[i].value] = true;
+        }
+
+        filterRouteGroup.style.display = "block";
+        filterRouteContainer.innerHTML = "";
+
+        routes.forEach(function (route) {
+            var label = document.createElement("label");
+            var cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.value = route;
+            cb.className = "filter-route-cb";
+            if (previouslyChecked[route]) cb.checked = true;
+            cb.addEventListener("change", renderReports);
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(" " + route));
+            filterRouteContainer.appendChild(label);
+        });
+    }
+
+    /**
+     * Get the list of currently selected routes from the filter checkboxes.
+     */
+    function getSelectedRoutes() {
+        if (!filterRouteContainer) return [];
+        var checked = filterRouteContainer.querySelectorAll("input.filter-route-cb:checked");
+        var routes = [];
+        for (var i = 0; i < checked.length; i++) {
+            routes.push(checked[i].value);
+        }
+        return routes;
+    }
+
     function setupFilters() {
         filterSearch.addEventListener("input", renderReports);
         filterLang.addEventListener("change", renderReports);
@@ -597,6 +664,13 @@
             filterSolo.checked = false;
             filterCombo.checked = false;
             filterSource.value = "all";
+            // Reset route checkboxes
+            if (filterRouteContainer) {
+                var cbs = filterRouteContainer.querySelectorAll("input.filter-route-cb");
+                for (var i = 0; i < cbs.length; i++) {
+                    cbs[i].checked = false;
+                }
+            }
             renderReports();
         });
     }
@@ -607,6 +681,7 @@
         var onlySolo = filterSolo.checked;
         var onlyCombo = filterCombo.checked;
         var source = filterSource.value;
+        var selectedRoutes = getSelectedRoutes();
 
         return reports.filter(function (r) {
             // Search filter
@@ -634,6 +709,25 @@
 
             // Source filter
             if (source !== "all" && r.source !== source) return false;
+
+            // Route of administration filter
+            if (selectedRoutes.length > 0) {
+                if (!r.substances || r.substances.length === 0) return false;
+                var reportRoutes = [];
+                r.substances.forEach(function (s) {
+                    if (!s.route) return;
+                    var parts = s.route.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
+                    parts.forEach(function (part) {
+                        var normalized = normalizeRoute(part);
+                        if (normalized) reportRoutes.push(normalized);
+                    });
+                });
+                // Keep report if it has at least one of the selected routes
+                var hasMatch = selectedRoutes.some(function (sr) {
+                    return reportRoutes.indexOf(sr) !== -1;
+                });
+                if (!hasMatch) return false;
+            }
 
             return true;
         });
