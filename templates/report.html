@@ -147,6 +147,7 @@
             // ─── TTS Audio Player (edge-tts backend) ───────────────────────
             var substance = {{ substance_name | tojson }};
             var rawText = {{ (report.body_translated or report.body_original or '') | tojson }};
+            var reportGender = {{ (report.gender_fr or report.gender or '') | tojson }};
             var audio = document.getElementById("ttsAudio");
             var btnPlayPause = document.getElementById("ttsPlayPause");
             var btnStop = document.getElementById("ttsStop");
@@ -161,7 +162,8 @@
             var btnKaraoke = document.getElementById("ttsKaraokeToggle");
 
             var isLoading = false;
-            var currentVoice = "denise";
+            var isStopped = false;
+            var currentVoice = "henri";
 
             // ─── Karaoke state ──────────────────────────────────────────────
             var karaokeEnabled = true;
@@ -352,8 +354,21 @@
                     });
             }
 
+            // Detect default voice based on report gender
+            // Female voice if genre is "Femme" or "Female", otherwise male voice
+            function getDefaultVoice() {
+                if (reportGender) {
+                    var g = reportGender.toLowerCase().trim();
+                    if (g === "femme" || g === "female") {
+                        return "denise";
+                    }
+                }
+                return "henri";
+            }
+
             // Load available voices from backend
             function loadVoices() {
+                var defaultVoice = getDefaultVoice();
                 fetch("/api/tts/voices")
                     .then(function(r) { return r.json(); })
                     .then(function(voices) {
@@ -362,23 +377,26 @@
                             var opt = document.createElement("option");
                             opt.value = v.key;
                             opt.textContent = v.label;
+                            if (v.key === defaultVoice) opt.selected = true;
                             voiceSelect.appendChild(opt);
                         });
-                        currentVoice = voices.length > 0 ? voices[0].key : "denise";
+                        currentVoice = defaultVoice;
                     })
                     .catch(function(e) {
                         console.error("Failed to load voices:", e);
                         var defaults = [
-                            {key: "denise", label: "Denise (femme)"},
-                            {key: "henri", label: "Henri (homme)"}
+                            {key: "henri", label: "Henri (homme)"},
+                            {key: "denise", label: "Denise (femme)"}
                         ];
                         voiceSelect.innerHTML = "";
                         defaults.forEach(function(v) {
                             var opt = document.createElement("option");
                             opt.value = v.key;
                             opt.textContent = v.label;
+                            if (v.key === defaultVoice) opt.selected = true;
                             voiceSelect.appendChild(opt);
                         });
+                        currentVoice = defaultVoice;
                     });
             }
 
@@ -413,7 +431,7 @@
                     iconPause.style.display = "none";
                     // Fetch karaoke timings once audio is ready
                     fetchTimings();
-                    if (andPlay) {
+                    if (andPlay && !isStopped) {
                         audio.playbackRate = parseFloat(speedSelect.value);
                         audio.play();
                     }
@@ -440,6 +458,10 @@
             });
 
             audio.addEventListener("play", function() {
+                if (isStopped) {
+                    audio.pause();
+                    return;
+                }
                 iconPlay.style.display = "none";
                 iconPause.style.display = "block";
                 progressText.textContent = "Lecture en cours";
@@ -464,6 +486,7 @@
             // Play/Pause toggle
             btnPlayPause.addEventListener("click", function() {
                 if (isLoading) return;
+                isStopped = false;
 
                 if (!audio.src || audio.src === window.location.href) {
                     loadAudio(true);
@@ -479,7 +502,10 @@
             });
 
             // Stop
-            btnStop.addEventListener("click", function() {
+            btnStop.addEventListener("click", function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                isStopped = true;
                 audio.pause();
                 audio.currentTime = 0;
                 progressFill.style.width = "0%";
