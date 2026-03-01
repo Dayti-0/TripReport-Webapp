@@ -588,6 +588,18 @@
         });
     }
 
+    // ─── Dosage toggle ────────────────────────────────────────────────────────
+
+    var dosageToggle = document.getElementById("dosageStatsToggle");
+    if (dosageToggle) {
+        dosageToggle.addEventListener("click", function () {
+            var container = document.getElementById("dosageStats");
+            if (container) {
+                container.classList.toggle("open");
+            }
+        });
+    }
+
     // ─── Filters ─────────────────────────────────────────────────────────────
 
     /**

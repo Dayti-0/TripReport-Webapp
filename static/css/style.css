@@ -385,13 +385,41 @@ a:hover {
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 0.75rem;
+    margin-bottom: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    user-select: none;
+}
+
+.dosage-stats-title:hover {
+    color: var(--text-secondary);
+}
+
+.dosage-stats-title .dosage-toggle-arrow {
+    display: inline-block;
+    transition: transform 0.25s ease;
+    font-size: 0.6rem;
+}
+
+.dosage-stats.open .dosage-toggle-arrow {
+    transform: rotate(90deg);
 }
 
 .dosage-stats-grid {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, margin-top 0.3s ease;
+    margin-top: 0;
+}
+
+.dosage-stats.open .dosage-stats-grid {
+    max-height: 500px;
+    margin-top: 0.75rem;
 }
 
 .dosage-row {
