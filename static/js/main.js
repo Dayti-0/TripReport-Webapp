@@ -596,11 +596,14 @@
     function buildRouteCheckboxes() {
         if (!filterRouteContainer || !filterRouteGroup) return;
 
+        var targetSub = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
         var routeSet = {};
         allReports.forEach(function (r) {
             if (!r.substances) return;
             r.substances.forEach(function (s) {
                 if (!s.route) return;
+                // Only collect routes for the searched substance
+                if (targetSub && !isMatchingSubstance(s.name, targetSub)) return;
                 var parts = s.route.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
                 parts.forEach(function (part) {
                     var normalized = normalizeRoute(part);
@@ -710,19 +713,22 @@
             // Source filter
             if (source !== "all" && r.source !== source) return false;
 
-            // Route of administration filter
+            // Route of administration filter — only check routes of the searched substance
             if (selectedRoutes.length > 0) {
                 if (!r.substances || r.substances.length === 0) return false;
+                var targetSub = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
                 var reportRoutes = [];
                 r.substances.forEach(function (s) {
                     if (!s.route) return;
+                    // Only consider routes for the searched substance
+                    if (targetSub && !isMatchingSubstance(s.name, targetSub)) return;
                     var parts = s.route.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
                     parts.forEach(function (part) {
                         var normalized = normalizeRoute(part);
                         if (normalized) reportRoutes.push(normalized);
                     });
                 });
-                // Keep report if it has at least one of the selected routes
+                // Keep report if the searched substance has at least one of the selected routes
                 var hasMatch = selectedRoutes.some(function (sr) {
                     return reportRoutes.indexOf(sr) !== -1;
                 });
