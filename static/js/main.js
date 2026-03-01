@@ -277,19 +277,42 @@
     // ─── Dosage Stats ─────────────────────────────────────────────────────────
 
     /**
-     * Parse a dose string like "20 mg", "3.5g", "200 ug" into {value, unit}.
+     * Parse a dose string like "20 mg", "3.5g", "200 ug", "120 seeds" into {value, unit}.
+     * Supports standard weight/volume units and count-based units (seeds, hits, caps, etc.).
      * Returns null if unparseable.
      */
     function parseDose(doseStr) {
         if (!doseStr) return null;
+        // Try standard weight/volume units first
         var match = doseStr.match(/^[\s]*([\d]+(?:[.,]\d+)?)\s*(mg|g|ug|µg|ml|mcg)\b/i);
-        if (!match) return null;
-        var value = parseFloat(match[1].replace(",", "."));
-        if (isNaN(value) || value <= 0) return null;
-        var unit = match[2].toLowerCase();
-        // Normalize µg and mcg to ug
-        if (unit === "µg" || unit === "mcg") unit = "ug";
-        return { value: value, unit: unit };
+        if (match) {
+            var value = parseFloat(match[1].replace(",", "."));
+            if (isNaN(value) || value <= 0) return null;
+            var unit = match[2].toLowerCase();
+            if (unit === "µg" || unit === "mcg") unit = "ug";
+            return { value: value, unit: unit };
+        }
+        // Try count-based units (seeds, hits, caps, tablets, drops, etc.)
+        var countMatch = doseStr.match(/^[\s]*([\d]+(?:[.,]\d+)?)\s*(seeds?|hits?|caps?|capsules?|tablets?|tabs?|drops?|pills?|blotters?|stamps?|joints?|bowls?|bumps?|lines?|sprays?|puffs?|pieces?|slices?|scoops?|spoons?|tablespoons?|teaspoons?|bags?|cups?|leaves?|flowers?|pods?)\b/i);
+        if (countMatch) {
+            var countValue = parseFloat(countMatch[1].replace(",", "."));
+            if (isNaN(countValue) || countValue <= 0) return null;
+            var countUnit = countMatch[2].toLowerCase();
+            // Normalize plurals to singular
+            if (countUnit === "leaves") {
+                countUnit = "leaf";
+            } else {
+                countUnit = countUnit.replace(/s$/, "");
+            }
+            // Normalize aliases
+            if (countUnit === "capsule") countUnit = "cap";
+            if (countUnit === "tablet") countUnit = "tab";
+            if (countUnit === "blotter" || countUnit === "stamp") countUnit = "hit";
+            if (countUnit === "tablespoon") countUnit = "tbsp";
+            if (countUnit === "teaspoon") countUnit = "tsp";
+            return { value: countValue, unit: countUnit };
+        }
+        return null;
     }
 
     /**
@@ -346,10 +369,21 @@
     }
 
     /**
-     * Convert a dose value to milligrams for weight units.
-     * Returns {value_mg, unit_type} where unit_type is "weight" or "volume".
+     * List of units that represent counts (not weight/volume).
+     */
+    var COUNT_UNITS = ["seed", "hit", "cap", "tab", "drop", "pill", "joint", "bowl",
+        "bump", "line", "spray", "puff", "piece", "slice", "scoop", "spoon",
+        "tbsp", "tsp", "bag", "cup", "leaf", "flower", "pod"];
+
+    /**
+     * Convert a dose value to a normalized form for aggregation.
+     * Returns {value_mg, unit_type} where unit_type is "weight", "volume", or "count".
+     * For count units, value_mg is just the raw count (no conversion needed).
      */
     function convertToMg(value, unit) {
+        if (COUNT_UNITS.indexOf(unit) !== -1) {
+            return { value_mg: value, unit_type: "count", count_unit: unit };
+        }
         switch (unit) {
             case "g":  return { value_mg: value * 1000, unit_type: "weight" };
             case "mg": return { value_mg: value,        unit_type: "weight" };
@@ -387,17 +421,23 @@
      * Converts all weight units (g, mg, ug) to mg before grouping,
      * so the same route with different units gets merged.
      * Volume (ml) stays separate since it can't be converted to weight.
+     * Count units (seeds, hits, etc.) stay in their original unit.
+     * When a report has multiple entries for the same substance + route,
+     * their doses are summed (e.g. Datura 120 seeds + 50 seeds = 170 seeds).
      * Returns an array: [{ route, unit, min, max, avg, count }]
      */
     function computeDosageStats() {
-        // Group doses by route + unit_type (weight or volume)
+        // Group doses by route + unit_type (weight, volume, or count:unit)
         var groups = {};
         var targetSubstance = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
 
         allReports.forEach(function (r) {
             if (!r.substances || r.substances.length === 0) return;
+
+            // First pass: sum doses per route within this report
+            // so multiple entries for the same substance+route are combined
+            var reportDoses = {}; // key: route|unit_type → summed value_mg
             r.substances.forEach(function (s) {
-                // Only include dosages for the searched substance
                 if (targetSubstance && !isMatchingSubstance(s.name, targetSubstance)) return;
 
                 var rawRoute = (s.route || "").trim().toLowerCase();
@@ -407,21 +447,37 @@
 
                 var converted = convertToMg(parsed.value, parsed.unit);
 
-                // Split compound routes (e.g. "oral\nrectal" or "buccal sublingual")
-                // and process each one individually
                 var routeParts = rawRoute.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
                 routeParts.forEach(function (part) {
                     var route = normalizeRoute(part);
-                    var key = route + "|" + converted.unit_type;
-                    if (!groups[key]) {
-                        groups[key] = {
+                    var unitKey = converted.unit_type === "count"
+                        ? "count:" + converted.count_unit
+                        : converted.unit_type;
+                    var key = route + "|" + unitKey;
+                    if (!reportDoses[key]) {
+                        reportDoses[key] = {
                             route: route,
                             unit_type: converted.unit_type,
-                            values: []
+                            count_unit: converted.count_unit || null,
+                            value_mg: 0
                         };
                     }
-                    groups[key].values.push(converted.value_mg);
+                    reportDoses[key].value_mg += converted.value_mg;
                 });
+            });
+
+            // Second pass: add summed per-report doses to global groups
+            Object.keys(reportDoses).forEach(function (key) {
+                var rd = reportDoses[key];
+                if (!groups[key]) {
+                    groups[key] = {
+                        route: rd.route,
+                        unit_type: rd.unit_type,
+                        count_unit: rd.count_unit,
+                        values: []
+                    };
+                }
+                groups[key].values.push(rd.value_mg);
             });
         });
 
@@ -433,21 +489,28 @@
             vals.sort(function (a, b) { return a - b; });
             var sum = vals.reduce(function (acc, v) { return acc + v; }, 0);
 
-            // For volume, keep ml; for weight, pick the best unit
             var displayUnit;
-            if (g.unit_type === "volume") {
+            if (g.unit_type === "count") {
+                // For count units, keep the original unit (seed, hit, etc.)
+                displayUnit = g.count_unit;
+            } else if (g.unit_type === "volume") {
                 displayUnit = "ml";
             } else {
                 displayUnit = chooseBestUnit(vals);
             }
 
+            // For count units, values are raw counts (no conversion needed)
+            var minVal = g.unit_type === "count" ? vals[0] : convertFromMg(vals[0], displayUnit);
+            var maxVal = g.unit_type === "count" ? vals[vals.length - 1] : convertFromMg(vals[vals.length - 1], displayUnit);
+            var avgVal = g.unit_type === "count" ? sum / vals.length : convertFromMg(sum / vals.length, displayUnit);
+
             results.push({
                 route: g.route,
                 unit: displayUnit,
                 count: vals.length,
-                min: convertFromMg(vals[0], displayUnit),
-                max: convertFromMg(vals[vals.length - 1], displayUnit),
-                avg: convertFromMg(sum / vals.length, displayUnit)
+                min: minVal,
+                max: maxVal,
+                avg: avgVal
             });
         });
 
@@ -458,6 +521,7 @@
 
     /**
      * Format a numeric dose value for display (remove trailing zeros).
+     * For count-based units, adds plural 's' when value > 1.
      */
     function formatDose(value, unit) {
         var str;
@@ -468,7 +532,16 @@
         } else {
             str = value.toFixed(2).replace(/\.?0+$/, "");
         }
-        return str + " " + unit;
+        // Pluralize count-based units
+        var displayUnit = unit;
+        if (COUNT_UNITS.indexOf(unit) !== -1 && value > 1) {
+            if (unit === "leaf") {
+                displayUnit = "leaves";
+            } else {
+                displayUnit = unit + "s";
+            }
+        }
+        return str + " " + displayUnit;
     }
 
     /**
