@@ -346,13 +346,51 @@
     }
 
     /**
+     * Convert a dose value to milligrams for weight units.
+     * Returns {value_mg, unit_type} where unit_type is "weight" or "volume".
+     */
+    function convertToMg(value, unit) {
+        switch (unit) {
+            case "g":  return { value_mg: value * 1000, unit_type: "weight" };
+            case "mg": return { value_mg: value,        unit_type: "weight" };
+            case "ug": return { value_mg: value / 1000, unit_type: "weight" };
+            case "ml": return { value_mg: value,        unit_type: "volume" };
+            default:   return { value_mg: value,        unit_type: "weight" };
+        }
+    }
+
+    /**
+     * Choose the best display unit for a set of mg values.
+     * Picks the unit that keeps most values in a readable range.
+     */
+    function chooseBestUnit(values_mg) {
+        if (values_mg.length === 0) return "mg";
+        var median = values_mg.slice().sort(function (a, b) { return a - b; })[Math.floor(values_mg.length / 2)];
+        if (median >= 1000) return "g";
+        if (median < 1) return "ug";
+        return "mg";
+    }
+
+    /**
+     * Convert a mg value to the target unit for display.
+     */
+    function convertFromMg(value_mg, targetUnit) {
+        switch (targetUnit) {
+            case "g":  return value_mg / 1000;
+            case "ug": return value_mg * 1000;
+            default:   return value_mg;
+        }
+    }
+
+    /**
      * Compute dosage stats grouped by route of administration.
-     * Only includes dosages for the searched substance (SUBSTANCE_NAME),
-     * not combo substances.
+     * Converts all weight units (g, mg, ug) to mg before grouping,
+     * so the same route with different units gets merged.
+     * Volume (ml) stays separate since it can't be converted to weight.
      * Returns an array: [{ route, unit, min, max, avg, count }]
      */
     function computeDosageStats() {
-        // Group doses by route + unit
+        // Group doses by route + unit_type (weight or volume)
         var groups = {};
         var targetSubstance = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
 
@@ -367,38 +405,49 @@
                 var parsed = parseDose(s.dose);
                 if (!parsed) return;
 
+                var converted = convertToMg(parsed.value, parsed.unit);
+
                 // Split compound routes (e.g. "oral\nrectal" or "buccal sublingual")
                 // and process each one individually
                 var routeParts = rawRoute.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
                 routeParts.forEach(function (part) {
                     var route = normalizeRoute(part);
-                    var key = route + "|" + parsed.unit;
+                    var key = route + "|" + converted.unit_type;
                     if (!groups[key]) {
                         groups[key] = {
                             route: route,
-                            unit: parsed.unit,
+                            unit_type: converted.unit_type,
                             values: []
                         };
                     }
-                    groups[key].values.push(parsed.value);
+                    groups[key].values.push(converted.value_mg);
                 });
             });
         });
 
-        // Compute min/avg/max for each group
+        // Compute min/avg/max for each group, choosing the best display unit
         var results = [];
         Object.keys(groups).forEach(function (key) {
             var g = groups[key];
             var vals = g.values;
             vals.sort(function (a, b) { return a - b; });
             var sum = vals.reduce(function (acc, v) { return acc + v; }, 0);
+
+            // For volume, keep ml; for weight, pick the best unit
+            var displayUnit;
+            if (g.unit_type === "volume") {
+                displayUnit = "ml";
+            } else {
+                displayUnit = chooseBestUnit(vals);
+            }
+
             results.push({
                 route: g.route,
-                unit: g.unit,
+                unit: displayUnit,
                 count: vals.length,
-                min: vals[0],
-                max: vals[vals.length - 1],
-                avg: sum / vals.length
+                min: convertFromMg(vals[0], displayUnit),
+                max: convertFromMg(vals[vals.length - 1], displayUnit),
+                avg: convertFromMg(sum / vals.length, displayUnit)
             });
         });
 
