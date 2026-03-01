@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="TripReport - Recherchez, explorez et lisez des trip reports traduits en français">
     <title>TripReport</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <a href="#searchInput" class="skip-link">Aller au champ de recherche</a>
+
     <div class="home-container">
         <header class="home-header">
             <h1 class="home-title">TripReport</h1>
@@ -24,10 +27,32 @@
                     placeholder="Entrez le nom d'une substance..."
                     autocomplete="off"
                     autofocus
+                    aria-label="Rechercher une substance"
                 >
                 <button type="submit" class="search-btn">Rechercher</button>
             </div>
         </form>
+
+        <!-- Recent searches (populated by JS) -->
+        <div class="recent-searches" id="recentSearches" style="display: none;">
+            <p class="recent-title">Recherches r&eacute;centes</p>
+            <div class="recent-list" id="recentList"></div>
+        </div>
+
+        <!-- Popular suggestions -->
+        <div class="suggestions-section">
+            <p class="recent-title">Substances populaires</p>
+            <div class="suggestion-chips">
+                <button class="suggestion-chip" data-substance="LSD">LSD</button>
+                <button class="suggestion-chip" data-substance="Cannabis">Cannabis</button>
+                <button class="suggestion-chip" data-substance="MDMA">MDMA</button>
+                <button class="suggestion-chip" data-substance="Psilocybin mushrooms">Psilocybin</button>
+                <button class="suggestion-chip" data-substance="DMT">DMT</button>
+                <button class="suggestion-chip" data-substance="Ketamine">K&eacute;tamine</button>
+                <button class="suggestion-chip" data-substance="4-HO-MET">4-HO-MET</button>
+                <button class="suggestion-chip" data-substance="2C-B">2C-B</button>
+            </div>
+        </div>
 
         {% if substances %}
         <section class="cached-section">
@@ -36,22 +61,77 @@
                 {% for sub in substances %}
                 <a href="/substance/{{ sub.slug }}" class="cached-card">
                     <span class="cached-name">{{ sub.name }}</span>
-                    <span class="cached-count">{{ sub.report_count }} rapports</span>
+                    <span class="cached-count">{{ sub.report_count }} rapport{{ 's' if sub.report_count != 1 }}</span>
                 </a>
                 {% endfor %}
             </div>
         </section>
         {% endif %}
+
+        <footer class="home-footer">
+            <kbd>Entr&eacute;e</kbd> pour rechercher
+        </footer>
     </div>
 
     <script>
-        document.getElementById('searchForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const substance = document.getElementById('searchInput').value.trim();
-            if (substance) {
-                window.location.href = '/substance/' + encodeURIComponent(substance);
+        (function() {
+            var STORAGE_KEY = "tripReportSearchHistory";
+            var MAX_HISTORY = 8;
+
+            function getHistory() {
+                try {
+                    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+                } catch(e) { return []; }
             }
-        });
+
+            function addToHistory(term) {
+                var h = getHistory().filter(function(x) { return x.toLowerCase() !== term.toLowerCase(); });
+                h.unshift(term);
+                if (h.length > MAX_HISTORY) h = h.slice(0, MAX_HISTORY);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(h));
+            }
+
+            function renderHistory() {
+                var history = getHistory();
+                var container = document.getElementById("recentSearches");
+                var list = document.getElementById("recentList");
+                if (!history.length || !container || !list) return;
+                container.style.display = "block";
+                list.innerHTML = "";
+                history.forEach(function(term) {
+                    var item = document.createElement("button");
+                    item.className = "recent-item";
+                    item.textContent = term;
+                    item.type = "button";
+                    item.addEventListener("click", function() {
+                        window.location.href = "/substance/" + encodeURIComponent(term);
+                    });
+                    list.appendChild(item);
+                });
+            }
+
+            renderHistory();
+
+            // Form submission
+            document.getElementById("searchForm").addEventListener("submit", function(e) {
+                e.preventDefault();
+                var substance = document.getElementById("searchInput").value.trim();
+                if (substance) {
+                    addToHistory(substance);
+                    window.location.href = "/substance/" + encodeURIComponent(substance);
+                }
+            });
+
+            // Suggestion chips
+            var chips = document.querySelectorAll(".suggestion-chip");
+            for (var i = 0; i < chips.length; i++) {
+                chips[i].addEventListener("click", function() {
+                    var sub = this.getAttribute("data-substance");
+                    addToHistory(sub);
+                    window.location.href = "/substance/" + encodeURIComponent(sub);
+                });
+            }
+        })();
     </script>
 </body>
 </html>

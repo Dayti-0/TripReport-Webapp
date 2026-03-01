@@ -38,6 +38,20 @@ SCRAPERS = [
 # ─── Routes ─────────────────────────────────────────────────────────────────
 
 
+@app.errorhandler(404)
+def page_not_found(e):
+    """Custom 404 error page."""
+    return render_template("error.html", error_code=404,
+                           error_message="Page introuvable. Cette page n'existe pas."), 404
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    """Custom 500 error page."""
+    return render_template("error.html", error_code=500,
+                           error_message="Erreur interne du serveur. Veuillez r\u00e9essayer."), 500
+
+
 @app.route("/")
 def index():
     """Home page with search field and cached substances."""

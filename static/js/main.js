@@ -1,15 +1,17 @@
 /**
- * TripReport - Frontend logic + Socket.IO client
+ * TripReport - Frontend logic + Socket.IO client (v2)
  */
 
 (function () {
     "use strict";
 
     // ─── State ───────────────────────────────────────────────────────────────
-    let allReports = [];
-    let socket = null;
-    let isScraping = false;
-    let readReports = JSON.parse(localStorage.getItem("readReports") || "[]");
+    var allReports = [];
+    var socket = null;
+    var isScraping = false;
+    var readReports = JSON.parse(localStorage.getItem("readReports") || "[]");
+    var favorites = JSON.parse(localStorage.getItem("tripReportFavorites") || "[]");
+    var currentSort = { field: "date", dir: "desc" };
 
     // Source labels for display
     var SOURCE_LABELS = {
@@ -18,22 +20,33 @@
         "psychonautwiki": "PsychonautWiki"
     };
 
+    // Rating categories mapped to sentiment
+    var POSITIVE_RATINGS = [
+        "glowing experiences", "very positive", "positive", "highly recommended",
+        "recommended", "favorable"
+    ];
+    var NEGATIVE_RATINGS = [
+        "bad trips", "train wrecks & trip disasters", "difficult experiences",
+        "very negative", "negative", "health problems", "addiction & habituation",
+        "not recommended"
+    ];
+
     // ─── DOM Elements ────────────────────────────────────────────────────────
-    const reportsGrid = document.getElementById("reportsGrid");
-    const progressContainer = document.getElementById("progressContainer");
-    const progressBar = document.getElementById("progressBar");
-    const progressText = document.getElementById("progressText");
-    const statsBar = document.getElementById("statsBar");
-    const sidebarToggle = document.getElementById("sidebarToggle");
-    const sidebarContent = document.getElementById("sidebarContent");
-    const filterSearch = document.getElementById("filterSearch");
-    const filterLang = document.getElementById("filterLang");
-    const filterSolo = document.getElementById("filterSolo");
-    const filterCombo = document.getElementById("filterCombo");
-    const filterSource = document.getElementById("filterSource");
-    const filterRouteGroup = document.getElementById("filterRouteGroup");
-    const filterRouteContainer = document.getElementById("filterRouteContainer");
-    const filterReset = document.getElementById("filterReset");
+    var reportsGrid = document.getElementById("reportsGrid");
+    var progressContainer = document.getElementById("progressContainer");
+    var progressBar = document.getElementById("progressBar");
+    var progressText = document.getElementById("progressText");
+    var sidebarToggle = document.getElementById("sidebarToggle");
+    var sidebarContent = document.getElementById("sidebarContent");
+    var filterSearch = document.getElementById("filterSearch");
+    var filterLang = document.getElementById("filterLang");
+    var filterSolo = document.getElementById("filterSolo");
+    var filterCombo = document.getElementById("filterCombo");
+    var filterSource = document.getElementById("filterSource");
+    var filterRouteGroup = document.getElementById("filterRouteGroup");
+    var filterRouteContainer = document.getElementById("filterRouteContainer");
+    var filterReset = document.getElementById("filterReset");
+    var scrollTopBtn = document.getElementById("scrollTopBtn");
 
     // ─── Initialization ──────────────────────────────────────────────────────
 
@@ -47,13 +60,13 @@
         }
 
         // Always start scraping to check for new/missing reports.
-        // The backend skips already-cached reports and will quickly finish
-        // if everything is already downloaded.
         startScraping();
 
         // Setup event listeners
         setupFilters();
         setupSidebar();
+        setupSorting();
+        setupScrollToTop();
     }
 
     // ─── Socket.IO ───────────────────────────────────────────────────────────
@@ -62,7 +75,6 @@
         if (isScraping) return;
         isScraping = true;
 
-        // Disconnect any previous socket before creating a new one
         if (socket) {
             socket.disconnect();
             socket = null;
@@ -71,7 +83,6 @@
         socket = io();
 
         socket.on("connect", function () {
-            console.log("[ws] Connected");
             socket.emit("start_scraping", { substance: SUBSTANCE_NAME });
         });
 
@@ -106,9 +117,7 @@
         });
 
         socket.on("report_scraped", function (data) {
-            // Add new report to the list
             var report = data.report;
-            // Check if already in the list
             var exists = allReports.some(function (r) { return r.id === report.id; });
             if (!exists) {
                 allReports.push(report);
@@ -154,20 +163,116 @@
         progressText.textContent = text;
     }
 
+    // ─── Sorting ─────────────────────────────────────────────────────────────
+
+    function setupSorting() {
+        var sortBtns = document.querySelectorAll(".sort-btn");
+        for (var i = 0; i < sortBtns.length; i++) {
+            sortBtns[i].addEventListener("click", function () {
+                var field = this.getAttribute("data-sort");
+                var dir = this.getAttribute("data-dir");
+
+                // Toggle direction if same field clicked
+                if (currentSort.field === field) {
+                    dir = currentSort.dir === "asc" ? "desc" : "asc";
+                }
+
+                currentSort = { field: field, dir: dir };
+                this.setAttribute("data-dir", dir);
+
+                // Update UI
+                var allBtns = document.querySelectorAll(".sort-btn");
+                for (var j = 0; j < allBtns.length; j++) {
+                    allBtns[j].classList.remove("active");
+                    var arrow = allBtns[j].querySelector(".sort-arrow");
+                    if (arrow) arrow.textContent = "";
+                }
+                this.classList.add("active");
+                var myArrow = this.querySelector(".sort-arrow");
+                if (!myArrow) {
+                    myArrow = document.createElement("span");
+                    myArrow.className = "sort-arrow";
+                    this.appendChild(myArrow);
+                }
+                myArrow.innerHTML = dir === "asc" ? "&uarr;" : "&darr;";
+
+                renderReports();
+            });
+        }
+    }
+
+    function sortReports(reports) {
+        var field = currentSort.field;
+        var dir = currentSort.dir;
+        var mult = dir === "asc" ? 1 : -1;
+
+        return reports.slice().sort(function (a, b) {
+            var va, vb;
+            switch (field) {
+                case "date":
+                    va = a.date || "";
+                    vb = b.date || "";
+                    break;
+                case "title":
+                    va = (a.title_translated || a.title || "").toLowerCase();
+                    vb = (b.title_translated || b.title || "").toLowerCase();
+                    break;
+                case "source":
+                    va = a.source || "";
+                    vb = b.source || "";
+                    break;
+                case "rating":
+                    va = getRatingSortValue(a);
+                    vb = getRatingSortValue(b);
+                    break;
+                default:
+                    va = a.date || "";
+                    vb = b.date || "";
+            }
+            if (va < vb) return -1 * mult;
+            if (va > vb) return 1 * mult;
+            return 0;
+        });
+    }
+
+    function getRatingSortValue(report) {
+        var rating = (report.rating || "").toLowerCase();
+        if (!rating) return "1_none";
+        for (var i = 0; i < POSITIVE_RATINGS.length; i++) {
+            if (rating.indexOf(POSITIVE_RATINGS[i]) !== -1) return "0_positive";
+        }
+        for (var j = 0; j < NEGATIVE_RATINGS.length; j++) {
+            if (rating.indexOf(NEGATIVE_RATINGS[j]) !== -1) return "2_negative";
+        }
+        return "1_neutral";
+    }
+
     // ─── Rendering ───────────────────────────────────────────────────────────
 
     function renderReports() {
         var filtered = applyFilters(allReports);
+        filtered = sortReports(filtered);
         reportsGrid.innerHTML = "";
 
         if (filtered.length === 0 && allReports.length > 0) {
-            reportsGrid.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Aucun rapport ne correspond aux filtres.</p>';
+            reportsGrid.innerHTML =
+                '<div class="no-results">' +
+                '<div class="no-results-icon">&#128269;</div>' +
+                '<p>Aucun rapport ne correspond aux filtres.</p>' +
+                '</div>';
         } else if (filtered.length === 0) {
-            reportsGrid.innerHTML = '<p style="color: var(--text-muted); padding: 2rem;">Aucun rapport disponible. Lancement du scraping...</p>';
+            reportsGrid.innerHTML =
+                '<div class="no-results">' +
+                '<div class="no-results-icon">&#9203;</div>' +
+                '<p>Aucun rapport disponible. Lancement du scraping...</p>' +
+                '</div>';
         }
 
-        filtered.forEach(function (report) {
-            reportsGrid.appendChild(createCard(report));
+        // Stagger animation
+        filtered.forEach(function (report, index) {
+            var card = createCard(report);
+            card.style.animationDelay = Math.min(index * 30, 500) + "ms";
+            reportsGrid.appendChild(card);
         });
 
         // Update displayed count
@@ -185,12 +290,8 @@
             substancesHtml = report.substances.map(function (s) {
                 var label = s.name;
                 var doseInfo = "";
-                if (s.dose) {
-                    doseInfo += s.dose;
-                }
-                if (s.route) {
-                    doseInfo += (doseInfo ? ", " : "") + s.route;
-                }
+                if (s.dose) doseInfo += s.dose;
+                if (s.route) doseInfo += (doseInfo ? ", " : "") + s.route;
                 if (doseInfo) {
                     return '<span class="substance-tag">' + escapeHtml(label) +
                         ' <span class="substance-dose">' + escapeHtml(doseInfo) + '</span></span>';
@@ -211,57 +312,110 @@
 
         // Read badge
         var isRead = readReports.indexOf(report.id) !== -1;
-        if (isRead) {
-            card.classList.add("report-read");
+        if (isRead) card.classList.add("report-read");
+
+        // Favorite state
+        var isFav = favorites.indexOf(report.id) !== -1;
+
+        // Rating badge
+        var ratingHtml = "";
+        if (report.rating) {
+            var ratingClass = getRatingClass(report.rating);
+            ratingHtml = '<span class="card-rating ' + ratingClass + '">' +
+                escapeHtml(truncate(report.rating, 35)) + '</span>';
         }
 
         card.innerHTML =
-            (isRead ? '<span class="card-read-badge" title="Cliquer pour retirer" data-report-id="' + escapeHtml(report.id) + '">D\u00e9j\u00e0 lu &times;</span>' : '') +
-            '<div class="card-title">' + escapeHtml(report.title_translated || report.title) + '</div>' +
+            '<div class="card-header">' +
+                '<div>' +
+                    (isRead ? '<span class="card-read-badge" title="Cliquer pour retirer" data-report-id="' + escapeHtml(report.id) + '">D\u00e9j\u00e0 lu &times;</span>' : '') +
+                    '<div class="card-title">' + escapeHtml(report.title_translated || report.title) + '</div>' +
+                '</div>' +
+                '<button class="card-favorite' + (isFav ? ' favorited' : '') + '" data-report-id="' + escapeHtml(report.id) + '" title="' + (isFav ? 'Retirer des favoris' : 'Ajouter aux favoris') + '">' +
+                    (isFav ? '\u2605' : '\u2606') +
+                '</button>' +
+            '</div>' +
             '<div class="card-meta">' +
                 escapeHtml(report.author || "Anonyme") +
-                (report.date ? ' &middot; ' + escapeHtml(report.date) : '') +
+                (report.date ? ' \u00b7 ' + escapeHtml(report.date) : '') +
             '</div>' +
             '<div class="card-substances">' + substancesHtml + '</div>' +
             (report.body_weight_kg || report.body_weight
                 ? '<div class="card-weight">' + escapeHtml(report.body_weight_kg || report.body_weight) +
-                  (report.gender_fr || report.gender ? ' &middot; ' + escapeHtml(report.gender_fr || report.gender) : '') +
+                  (report.gender_fr || report.gender ? ' \u00b7 ' + escapeHtml(report.gender_fr || report.gender) : '') +
                   '</div>'
                 : '') +
+            ratingHtml +
             (report.categories
                 ? '<div class="card-categories">' + escapeHtml(report.categories) + '</div>'
                 : '') +
             '<div class="card-footer">' +
-                '<span class="card-source">' + escapeHtml(report.source) + ' ' + typeBadge + '</span>' +
+                '<span class="card-source">' + escapeHtml(SOURCE_LABELS[report.source] || report.source) + ' ' + typeBadge + '</span>' +
                 '<a href="/report/' + encodeURIComponent(SUBSTANCE_NAME) + '/' +
                     encodeURIComponent(report.id) + '" class="card-link">Lire &rarr;</a>' +
             '</div>';
 
-        // Make read badge clickable to unmark
+        // Read badge click handler
         if (isRead) {
             var badge = card.querySelector(".card-read-badge");
-            badge.addEventListener("click", function(e) {
+            if (badge) {
+                badge.addEventListener("click", function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var rid = this.getAttribute("data-report-id");
+                    var idx = readReports.indexOf(rid);
+                    if (idx !== -1) {
+                        readReports.splice(idx, 1);
+                        localStorage.setItem("readReports", JSON.stringify(readReports));
+                    }
+                    this.parentElement.parentElement.parentElement.classList.remove("report-read");
+                    this.remove();
+                });
+            }
+        }
+
+        // Favorite button handler
+        var favBtn = card.querySelector(".card-favorite");
+        if (favBtn) {
+            favBtn.addEventListener("click", function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 var rid = this.getAttribute("data-report-id");
-                var idx = readReports.indexOf(rid);
+                var idx = favorites.indexOf(rid);
                 if (idx !== -1) {
-                    readReports.splice(idx, 1);
-                    localStorage.setItem("readReports", JSON.stringify(readReports));
+                    favorites.splice(idx, 1);
+                    this.classList.remove("favorited");
+                    this.textContent = "\u2606";
+                    this.title = "Ajouter aux favoris";
+                } else {
+                    favorites.push(rid);
+                    this.classList.add("favorited");
+                    this.textContent = "\u2605";
+                    this.title = "Retirer des favoris";
                 }
-                // Remove badge and read styling from card
-                this.parentElement.classList.remove("report-read");
-                this.remove();
+                localStorage.setItem("tripReportFavorites", JSON.stringify(favorites));
             });
         }
 
         return card;
     }
 
+    function getRatingClass(rating) {
+        var r = rating.toLowerCase();
+        for (var i = 0; i < POSITIVE_RATINGS.length; i++) {
+            if (r.indexOf(POSITIVE_RATINGS[i]) !== -1) return "rating-positive";
+        }
+        for (var j = 0; j < NEGATIVE_RATINGS.length; j++) {
+            if (r.indexOf(NEGATIVE_RATINGS[j]) !== -1) return "rating-negative";
+        }
+        return "rating-neutral";
+    }
+
     function updateStats() {
         var total = allReports.length;
         var solo = 0;
         var combo = 0;
+        var fr = 0;
 
         allReports.forEach(function (r) {
             var isCombo = r.is_combo ||
@@ -269,26 +423,46 @@
                 (r.substances_text && r.substances_text.indexOf("&") !== -1);
             if (isCombo) combo++;
             else solo++;
+            if (r.language === "fr") fr++;
         });
 
-        document.getElementById("statTotal").textContent = total;
-        document.getElementById("statSolo").textContent = solo;
-        document.getElementById("statCombo").textContent = combo;
+        animateStatValue("statTotal", total);
+        animateStatValue("statSolo", solo);
+        animateStatValue("statCombo", combo);
+        animateStatValue("statFr", fr);
         document.getElementById("statDisplayed").textContent = total;
 
         renderDosageStats();
     }
 
+    // Animate stat numbers counting up
+    function animateStatValue(elementId, targetValue) {
+        var el = document.getElementById(elementId);
+        if (!el) return;
+        var current = parseInt(el.textContent) || 0;
+        if (current === targetValue) return;
+
+        var diff = targetValue - current;
+        var steps = Math.min(Math.abs(diff), 20);
+        var stepSize = diff / steps;
+        var step = 0;
+
+        function tick() {
+            step++;
+            if (step >= steps) {
+                el.textContent = targetValue;
+                return;
+            }
+            el.textContent = Math.round(current + stepSize * step);
+            requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    }
+
     // ─── Dosage Stats ─────────────────────────────────────────────────────────
 
-    /**
-     * Parse a dose string like "20 mg", "3.5g", "200 ug", "120 seeds" into {value, unit}.
-     * Supports standard weight/volume units and count-based units (seeds, hits, caps, etc.).
-     * Returns null if unparseable.
-     */
     function parseDose(doseStr) {
         if (!doseStr) return null;
-        // Try standard weight/volume units first
         var match = doseStr.match(/^[\s]*([\d]+(?:[.,]\d+)?)\s*(mg|g|ug|µg|ml|mcg)\b/i);
         if (match) {
             var value = parseFloat(match[1].replace(",", "."));
@@ -297,19 +471,16 @@
             if (unit === "µg" || unit === "mcg") unit = "ug";
             return { value: value, unit: unit };
         }
-        // Try count-based units (seeds, hits, caps, tablets, drops, etc.)
         var countMatch = doseStr.match(/^[\s]*([\d]+(?:[.,]\d+)?)\s*(seeds?|hits?|caps?|capsules?|tablets?|tabs?|drops?|pills?|blotters?|stamps?|joints?|bowls?|bumps?|lines?|sprays?|puffs?|pieces?|slices?|scoops?|spoons?|tablespoons?|teaspoons?|bags?|cups?|leaves?|flowers?|pods?)\b/i);
         if (countMatch) {
             var countValue = parseFloat(countMatch[1].replace(",", "."));
             if (isNaN(countValue) || countValue <= 0) return null;
             var countUnit = countMatch[2].toLowerCase();
-            // Normalize plurals to singular
             if (countUnit === "leaves") {
                 countUnit = "leaf";
             } else {
                 countUnit = countUnit.replace(/s$/, "");
             }
-            // Normalize aliases
             if (countUnit === "capsule") countUnit = "cap";
             if (countUnit === "tablet") countUnit = "tab";
             if (countUnit === "blotter" || countUnit === "stamp") countUnit = "hit";
@@ -320,18 +491,12 @@
         return null;
     }
 
-    /**
-     * Check if a substance name matches the searched substance.
-     * Handles case-insensitive comparison and common name variations.
-     */
     function isMatchingSubstance(substanceName, searchedName) {
         if (!substanceName || !searchedName) return false;
         var a = substanceName.toLowerCase().trim();
         var b = searchedName.toLowerCase().trim();
         if (a === b) return true;
-        // Check if one contains the other (e.g. "4-HO-MET (Metocin)" matches "4-HO-MET")
         if (a.indexOf(b) !== -1 || b.indexOf(a) !== -1) return true;
-        // Normalize: remove hyphens, spaces, dots for comparison
         var normA = a.replace(/[-\s.()]/g, "");
         var normB = b.replace(/[-\s.()]/g, "");
         if (normA === normB) return true;
@@ -339,10 +504,6 @@
         return false;
     }
 
-    /**
-     * Normalize a route of administration string.
-     * Handles multi-word routes, aliases, and common variations.
-     */
     function normalizeRoute(routeStr) {
         var ROUTE_ALIASES = {
             "insufflated": "insufflated",
@@ -373,18 +534,10 @@
         return ROUTE_ALIASES[route] || route;
     }
 
-    /**
-     * List of units that represent counts (not weight/volume).
-     */
     var COUNT_UNITS = ["seed", "hit", "cap", "tab", "drop", "pill", "joint", "bowl",
         "bump", "line", "spray", "puff", "piece", "slice", "scoop", "spoon",
         "tbsp", "tsp", "bag", "cup", "leaf", "flower", "pod"];
 
-    /**
-     * Convert a dose value to a normalized form for aggregation.
-     * Returns {value_mg, unit_type} where unit_type is "weight", "volume", or "count".
-     * For count units, value_mg is just the raw count (no conversion needed).
-     */
     function convertToMg(value, unit) {
         if (COUNT_UNITS.indexOf(unit) !== -1) {
             return { value_mg: value, unit_type: "count", count_unit: unit };
@@ -398,10 +551,6 @@
         }
     }
 
-    /**
-     * Choose the best display unit for a set of mg values.
-     * Picks the unit that keeps most values in a readable range.
-     */
     function chooseBestUnit(values_mg) {
         if (values_mg.length === 0) return "mg";
         var median = values_mg.slice().sort(function (a, b) { return a - b; })[Math.floor(values_mg.length / 2)];
@@ -410,9 +559,6 @@
         return "mg";
     }
 
-    /**
-     * Convert a mg value to the target unit for display.
-     */
     function convertFromMg(value_mg, targetUnit) {
         switch (targetUnit) {
             case "g":  return value_mg / 1000;
@@ -421,27 +567,14 @@
         }
     }
 
-    /**
-     * Compute dosage stats grouped by route of administration.
-     * Converts all weight units (g, mg, ug) to mg before grouping,
-     * so the same route with different units gets merged.
-     * Volume (ml) stays separate since it can't be converted to weight.
-     * Count units (seeds, hits, etc.) stay in their original unit.
-     * When a report has multiple entries for the same substance + route,
-     * their doses are summed (e.g. Datura 120 seeds + 50 seeds = 170 seeds).
-     * Returns an array: [{ route, unit, min, max, avg, count }]
-     */
     function computeDosageStats() {
-        // Group doses by route + unit_type (weight, volume, or count:unit)
         var groups = {};
         var targetSubstance = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
 
         allReports.forEach(function (r) {
             if (!r.substances || r.substances.length === 0) return;
 
-            // First pass: sum doses per route within this report
-            // so multiple entries for the same substance+route are combined
-            var reportDoses = {}; // key: route|unit_type → summed value_mg
+            var reportDoses = {};
             r.substances.forEach(function (s) {
                 if (targetSubstance && !isMatchingSubstance(s.name, targetSubstance)) return;
 
@@ -471,7 +604,6 @@
                 });
             });
 
-            // Second pass: add summed per-report doses to global groups
             Object.keys(reportDoses).forEach(function (key) {
                 var rd = reportDoses[key];
                 if (!groups[key]) {
@@ -486,7 +618,6 @@
             });
         });
 
-        // Compute min/avg/max for each group, choosing the best display unit
         var results = [];
         Object.keys(groups).forEach(function (key) {
             var g = groups[key];
@@ -496,7 +627,6 @@
 
             var displayUnit;
             if (g.unit_type === "count") {
-                // For count units, keep the original unit (seed, hit, etc.)
                 displayUnit = g.count_unit;
             } else if (g.unit_type === "volume") {
                 displayUnit = "ml";
@@ -504,7 +634,6 @@
                 displayUnit = chooseBestUnit(vals);
             }
 
-            // For count units, values are raw counts (no conversion needed)
             var minVal = g.unit_type === "count" ? vals[0] : convertFromMg(vals[0], displayUnit);
             var maxVal = g.unit_type === "count" ? vals[vals.length - 1] : convertFromMg(vals[vals.length - 1], displayUnit);
             var avgVal = g.unit_type === "count" ? sum / vals.length : convertFromMg(sum / vals.length, displayUnit);
@@ -519,15 +648,10 @@
             });
         });
 
-        // Sort by count descending
         results.sort(function (a, b) { return b.count - a.count; });
         return results;
     }
 
-    /**
-     * Format a numeric dose value for display (remove trailing zeros).
-     * For count-based units, adds plural 's' when value > 1.
-     */
     function formatDose(value, unit) {
         var str;
         if (value >= 100) {
@@ -537,7 +661,6 @@
         } else {
             str = value.toFixed(2).replace(/\.?0+$/, "");
         }
-        // Pluralize count-based units
         var displayUnit = unit;
         if (COUNT_UNITS.indexOf(unit) !== -1 && value > 1) {
             if (unit === "leaf") {
@@ -549,9 +672,6 @@
         return str + " " + displayUnit;
     }
 
-    /**
-     * Render dosage stats into the #dosageStats container.
-     */
     function renderDosageStats() {
         var container = document.getElementById("dosageStats");
         var grid = document.getElementById("dosageStatsGrid");
@@ -602,9 +722,6 @@
 
     // ─── Filters ─────────────────────────────────────────────────────────────
 
-    /**
-     * Build route-of-administration checkboxes dynamically from available reports.
-     */
     function buildRouteCheckboxes() {
         if (!filterRouteContainer || !filterRouteGroup) return;
 
@@ -614,7 +731,6 @@
             if (!r.substances) return;
             r.substances.forEach(function (s) {
                 if (!s.route) return;
-                // Only collect routes for the searched substance
                 if (targetSub && !isMatchingSubstance(s.name, targetSub)) return;
                 var parts = s.route.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
                 parts.forEach(function (part) {
@@ -630,7 +746,6 @@
             return;
         }
 
-        // Preserve currently checked routes
         var previouslyChecked = {};
         var existing = filterRouteContainer.querySelectorAll("input[type=checkbox]");
         for (var i = 0; i < existing.length; i++) {
@@ -654,9 +769,6 @@
         });
     }
 
-    /**
-     * Get the list of currently selected routes from the filter checkboxes.
-     */
     function getSelectedRoutes() {
         if (!filterRouteContainer) return [];
         var checked = filterRouteContainer.querySelectorAll("input.filter-route-cb:checked");
@@ -679,7 +791,6 @@
             filterSolo.checked = false;
             filterCombo.checked = false;
             filterSource.value = "all";
-            // Reset route checkboxes
             if (filterRouteContainer) {
                 var cbs = filterRouteContainer.querySelectorAll("input.filter-route-cb");
                 for (var i = 0; i < cbs.length; i++) {
@@ -725,14 +836,13 @@
             // Source filter
             if (source !== "all" && r.source !== source) return false;
 
-            // Route of administration filter — only check routes of the searched substance
+            // Route of administration filter
             if (selectedRoutes.length > 0) {
                 if (!r.substances || r.substances.length === 0) return false;
                 var targetSub = (typeof SUBSTANCE_NAME !== "undefined") ? SUBSTANCE_NAME : "";
                 var reportRoutes = [];
                 r.substances.forEach(function (s) {
                     if (!s.route) return;
-                    // Only consider routes for the searched substance
                     if (targetSub && !isMatchingSubstance(s.name, targetSub)) return;
                     var parts = s.route.split(/[\n\r]+/).map(function (p) { return p.trim(); }).filter(Boolean);
                     parts.forEach(function (part) {
@@ -740,7 +850,6 @@
                         if (normalized) reportRoutes.push(normalized);
                     });
                 });
-                // Keep report if the searched substance has at least one of the selected routes
                 var hasMatch = selectedRoutes.some(function (sr) {
                     return reportRoutes.indexOf(sr) !== -1;
                 });
@@ -755,7 +864,27 @@
 
     function setupSidebar() {
         sidebarToggle.addEventListener("click", function () {
-            sidebarContent.classList.toggle("open");
+            var isOpen = sidebarContent.classList.toggle("open");
+            sidebarToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            sidebarToggle.textContent = isOpen ? "Masquer les filtres" : "Filtres";
+        });
+    }
+
+    // ─── Scroll to Top ──────────────────────────────────────────────────────
+
+    function setupScrollToTop() {
+        if (!scrollTopBtn) return;
+
+        window.addEventListener("scroll", function () {
+            if (window.scrollY > 400) {
+                scrollTopBtn.classList.add("visible");
+            } else {
+                scrollTopBtn.classList.remove("visible");
+            }
+        }, { passive: true });
+
+        scrollTopBtn.addEventListener("click", function () {
+            window.scrollTo({ top: 0, behavior: "smooth" });
         });
     }
 
@@ -770,7 +899,7 @@
 
     function truncate(str, maxLen) {
         if (!str) return "";
-        return str.length > maxLen ? str.substring(0, maxLen) + "..." : str;
+        return str.length > maxLen ? str.substring(0, maxLen) + "\u2026" : str;
     }
 
     // ─── Cleanup ──────────────────────────────────────────────────────────────
