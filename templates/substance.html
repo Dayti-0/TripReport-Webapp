@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 </head>
 <body>
+    <a href="#reportsGrid" class="skip-link">Aller aux rapports</a>
+
     <!-- Progress bar -->
     <div id="progressContainer" class="progress-container" style="display: none;">
         <div class="progress-bar-wrapper">
@@ -31,6 +33,7 @@
                         class="substance-search-input"
                         placeholder="Chercher une autre substance..."
                         autocomplete="off"
+                        aria-label="Rechercher une autre substance"
                     >
                     <button type="submit" class="substance-search-btn">Rechercher</button>
                 </form>
@@ -53,6 +56,10 @@
                 <span class="stat-label">Combo</span>
             </div>
             <div class="stat-item">
+                <span class="stat-value" id="statFr">0</span>
+                <span class="stat-label">Fran&ccedil;ais</span>
+            </div>
+            <div class="stat-item">
                 <span class="stat-value" id="statDisplayed">0</span>
                 <span class="stat-label">Affich&eacute;s</span>
             </div>
@@ -67,17 +74,28 @@
             <div class="dosage-stats-grid" id="dosageStatsGrid"></div>
         </div>
 
+        <!-- Sort bar -->
+        <div class="sort-bar" id="sortBar">
+            <span class="sort-label">Trier par :</span>
+            <div class="sort-options">
+                <button class="sort-btn active" data-sort="date" data-dir="desc">Date <span class="sort-arrow">&darr;</span></button>
+                <button class="sort-btn" data-sort="title" data-dir="asc">Titre</button>
+                <button class="sort-btn" data-sort="source" data-dir="asc">Source</button>
+                <button class="sort-btn" data-sort="rating" data-dir="desc">Rating</button>
+            </div>
+        </div>
+
         <div class="substance-layout">
             <!-- Sidebar filters -->
             <aside class="sidebar" id="sidebar">
-                <button class="sidebar-toggle" id="sidebarToggle">Filtres</button>
-                <div class="sidebar-content" id="sidebarContent">
+                <button class="sidebar-toggle" id="sidebarToggle" aria-expanded="false" aria-controls="sidebarContent">Filtres</button>
+                <div class="sidebar-content" id="sidebarContent" role="region" aria-label="Filtres">
                     <div class="filter-group">
-                        <label class="filter-label">Recherche</label>
+                        <label class="filter-label" for="filterSearch">Recherche</label>
                         <input type="text" id="filterSearch" class="filter-input" placeholder="Titre, auteur, substance...">
                     </div>
                     <div class="filter-group">
-                        <label class="filter-label">Langue</label>
+                        <label class="filter-label" for="filterLang">Langue</label>
                         <select id="filterLang" class="filter-select">
                             <option value="all">Toutes</option>
                             <option value="fr">Fran&ccedil;ais</option>
@@ -85,7 +103,7 @@
                         </select>
                     </div>
                     <div class="filter-group">
-                        <label class="filter-label">Source</label>
+                        <label class="filter-label" for="filterSource">Source</label>
                         <select id="filterSource" class="filter-select">
                             <option value="all">Toutes</option>
                             <option value="erowid">Erowid</option>
@@ -104,22 +122,37 @@
                         <label class="filter-label">Voie d'administration</label>
                         <div id="filterRouteContainer" class="filter-checkboxes"></div>
                     </div>
-                    <button class="filter-reset-btn" id="filterReset">R&eacute;initialiser</button>
+                    <button class="filter-reset-btn" id="filterReset">R&eacute;initialiser les filtres</button>
                 </div>
             </aside>
 
             <!-- Reports grid -->
-            <main class="reports-grid" id="reportsGrid">
+            <main class="reports-grid" id="reportsGrid" aria-label="Liste des rapports">
                 <!-- Cards are inserted dynamically -->
             </main>
         </div>
     </div>
 
+    <!-- Scroll to top button -->
+    <button class="scroll-top-btn" id="scrollTopBtn" title="Remonter en haut" aria-label="Remonter en haut">&uarr;</button>
+
     <script>
-        const SUBSTANCE_NAME = {{ substance_name | tojson }};
-        const CACHED_INDEX = {{ cached_index | tojson }};
-    </script>
-    <script>
+        var SUBSTANCE_NAME = {{ substance_name | tojson }};
+        var CACHED_INDEX = {{ cached_index | tojson }};
+
+        // Save to search history
+        (function() {
+            var STORAGE_KEY = "tripReportSearchHistory";
+            var MAX_HISTORY = 8;
+            try {
+                var h = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+                h = h.filter(function(x) { return x.toLowerCase() !== SUBSTANCE_NAME.toLowerCase(); });
+                h.unshift(SUBSTANCE_NAME);
+                if (h.length > MAX_HISTORY) h = h.slice(0, MAX_HISTORY);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(h));
+            } catch(e) {}
+        })();
+
         // Search for another substance from the substance page
         document.getElementById('substanceSearchForm').addEventListener('submit', function(e) {
             e.preventDefault();

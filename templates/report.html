@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% if report %}{{ report.title_translated or report.title }}{% else %}Rapport introuvable{% endif %} - TripReport</title>
+    <meta name="description" content="{% if report %}Trip report : {{ report.title_translated or report.title }} - {{ report.author }}{% else %}Rapport introuvable{% endif %}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+    <a href="#reportBody" class="skip-link">Aller au contenu du rapport</a>
+
     <div class="report-page">
         <header class="report-header">
             <a href="/" class="site-title">TripReport</a>
@@ -20,11 +23,17 @@
             <div class="report-meta-header">
                 <h1 class="report-title">{{ report.title_translated or report.title }}</h1>
                 <div class="report-meta">
-                    <span class="meta-author">Par {{ report.author }}</span>
+                    <span class="meta-author">Par {{ report.author or 'Anonyme' }}</span>
                     {% if report.date %}
+                    <span class="meta-separator">&middot;</span>
                     <span class="meta-date">{{ report.date }}</span>
                     {% endif %}
-                    <span class="meta-source">Source : {{ report.source }}</span>
+                    <span class="meta-separator">&middot;</span>
+                    <span class="meta-source">{{ report.source }}</span>
+                    {% if report.language %}
+                    <span class="meta-separator">&middot;</span>
+                    <span class="meta-source">{{ 'Fran\u00e7ais' if report.language == 'fr' else 'Anglais (traduit)' }}</span>
+                    {% endif %}
                 </div>
             </div>
 
@@ -62,7 +71,7 @@
             </div>
             {% endif %}
 
-            <div class="report-body">
+            <div class="report-body" id="reportBody">
                 {% if report.body_translated %}
                     {{ report.body_translated | replace('\n', '<br>') | safe }}
                 {% elif report.body_original %}
@@ -72,29 +81,32 @@
                 {% endif %}
             </div>
 
-            {% if report.url %}
             <div class="report-footer">
+                {% if report.url %}
                 <a href="{{ report.url }}" target="_blank" rel="noopener" class="original-link">
-                    Voir le rapport original &rarr;
+                    Voir l'original &rarr;
+                </a>
+                {% endif %}
+                <a href="/substance/{{ substance_name }}" class="report-action-btn">
+                    &larr; Retour au dashboard
                 </a>
             </div>
-            {% endif %}
         </article>
 
         <!-- Audio Player (TTS via edge-tts) -->
         <div id="ttsPlayer" class="tts-player">
             <div class="tts-player-inner">
                 <div class="tts-controls">
-                    <button id="ttsPlayPause" class="tts-btn tts-btn-play" title="Lecture / Pause">
+                    <button id="ttsPlayPause" class="tts-btn tts-btn-play" title="Lecture / Pause" aria-label="Lecture ou Pause">
                         <svg id="ttsIconPlay" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                         <svg id="ttsIconPause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                     </button>
-                    <button id="ttsStop" class="tts-btn" title="Stop">
+                    <button id="ttsStop" class="tts-btn" title="Stop" aria-label="Arr&ecirc;ter la lecture">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
                     </button>
                 </div>
                 <div class="tts-progress-wrapper">
-                    <div class="tts-progress-bar" id="ttsProgressBar">
+                    <div class="tts-progress-bar" id="ttsProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
                         <div class="tts-progress-fill" id="ttsProgressFill"></div>
                     </div>
                     <span class="tts-progress-text" id="ttsProgressText">Pr&ecirc;t</span>
@@ -116,7 +128,7 @@
                     <label for="ttsVoice" class="tts-speed-label">Voix</label>
                     <select id="ttsVoice" class="tts-speed-select"></select>
                 </div>
-                <button id="ttsKaraokeToggle" class="tts-btn tts-btn-karaoke" title="Karaoké (surligner le texte)">
+                <button id="ttsKaraokeToggle" class="tts-btn tts-btn-karaoke" title="Karaok&eacute; (surligner le texte)" aria-label="Activer le mode karaok&eacute;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>
                 </button>
             </div>
@@ -131,6 +143,9 @@
         {% endif %}
     </div>
 
+    <!-- Scroll to top button -->
+    <button class="scroll-top-btn" id="scrollTopBtn" title="Remonter en haut" aria-label="Remonter en haut">&uarr;</button>
+
     {% if report %}
     <script>
         (function() {
@@ -142,6 +157,32 @@
                     readReports.push(reportId);
                     localStorage.setItem("readReports", JSON.stringify(readReports));
                 }
+            }
+
+            // ─── Style timestamps in report body ────────────────────────────
+            (function styleTimestamps() {
+                var body = document.getElementById("reportBody");
+                if (!body) return;
+                // Match T+X:XX or T+ X:XX patterns and wrap them in timestamp badges
+                body.innerHTML = body.innerHTML.replace(
+                    /\b(T\s*\+\s*\d+:\d{2}(?::\d{2})?)\b/g,
+                    '<span class="timestamp-badge">$1</span>'
+                );
+            })();
+
+            // ─── Scroll to top ──────────────────────────────────────────────
+            var scrollBtn = document.getElementById("scrollTopBtn");
+            if (scrollBtn) {
+                window.addEventListener("scroll", function() {
+                    if (window.scrollY > 400) {
+                        scrollBtn.classList.add("visible");
+                    } else {
+                        scrollBtn.classList.remove("visible");
+                    }
+                }, { passive: true });
+                scrollBtn.addEventListener("click", function() {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                });
             }
 
             // ─── TTS Audio Player (edge-tts backend) ───────────────────────
@@ -168,14 +209,13 @@
             // ─── Karaoke state ──────────────────────────────────────────────
             var karaokeEnabled = true;
             var karaokeReady = false;
-            var karaokeTimings = null;   // [{t, d, w}, ...]
-            var karaokeSpans = [];       // DOM spans in order
+            var karaokeTimings = null;
+            var karaokeSpans = [];
             var karaokeActiveIdx = -1;
-            var originalBodyHTML = null; // to restore when disabling
+            var originalBodyHTML = null;
 
             btnKaraoke.classList.add("tts-btn-karaoke-active");
 
-            // Format seconds as mm:ss
             function formatTime(s) {
                 if (!s || !isFinite(s)) return "--:--";
                 var m = Math.floor(s / 60);
@@ -183,7 +223,6 @@
                 return (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
             }
 
-            // Escape HTML entities
             function escapeHtml(str) {
                 var d = document.createElement("div");
                 d.appendChild(document.createTextNode(str));
@@ -195,12 +234,10 @@
                 var reportBody = document.querySelector('.report-body');
                 if (!reportBody || !timings || !timings.length) return;
 
-                // Save original HTML so we can restore it
                 if (originalBodyHTML === null) {
                     originalBodyHTML = reportBody.innerHTML;
                 }
 
-                // Build HTML by matching timing words to the raw text
                 var html = '';
                 var searchPos = 0;
                 var text = rawText;
@@ -210,7 +247,6 @@
                     var idx = text.indexOf(word, searchPos);
 
                     if (idx === -1) {
-                        // Try case-insensitive search nearby
                         var lowerWord = word.toLowerCase();
                         var found = false;
                         for (var j = searchPos; j < Math.min(searchPos + 100, text.length); j++) {
@@ -221,31 +257,24 @@
                                 break;
                             }
                         }
-                        if (!found) {
-                            // Skip this timing entry — word not found in text
-                            continue;
-                        }
+                        if (!found) continue;
                     }
 
-                    // Add text between previous word and this one
                     if (idx > searchPos) {
                         var between = text.substring(searchPos, idx);
                         html += escapeHtml(between).replace(/\n/g, '<br>');
                     }
 
-                    // Add word wrapped in a karaoke span
                     html += '<span class="kw" data-ki="' + i + '">' + escapeHtml(word) + '</span>';
                     searchPos = idx + word.length;
                 }
 
-                // Add any remaining text after the last word
                 if (searchPos < text.length) {
                     html += escapeHtml(text.substring(searchPos)).replace(/\n/g, '<br>');
                 }
 
                 reportBody.innerHTML = html;
 
-                // Collect all karaoke word spans
                 karaokeSpans = [];
                 var spans = reportBody.querySelectorAll('.kw');
                 for (var k = 0; k < spans.length; k++) {
@@ -265,11 +294,9 @@
                 karaokeActiveIdx = -1;
             }
 
-            // ─── Karaoke: highlight active word during playback ─────────────
             function updateKaraoke(currentTime) {
                 if (!karaokeReady || !karaokeTimings || !karaokeSpans.length) return;
 
-                // Binary search for the active timing entry
                 var timings = karaokeTimings;
                 var lo = 0, hi = timings.length - 1;
                 var activeIdx = -1;
@@ -284,14 +311,12 @@
                     }
                 }
 
-                // Check that we're still within this word's duration
                 if (activeIdx >= 0 && currentTime > timings[activeIdx].t + timings[activeIdx].d + 0.15) {
-                    // Between words — keep the last word highlighted briefly
+                    // Between words
                 }
 
                 if (activeIdx === karaokeActiveIdx) return;
 
-                // Remove previous highlight
                 if (karaokeActiveIdx >= 0) {
                     var prevSpan = document.querySelector('.kw[data-ki="' + karaokeActiveIdx + '"]');
                     if (prevSpan) prevSpan.classList.remove('kw-active');
@@ -299,12 +324,10 @@
 
                 karaokeActiveIdx = activeIdx;
 
-                // Add new highlight
                 if (activeIdx >= 0) {
                     var span = document.querySelector('.kw[data-ki="' + activeIdx + '"]');
                     if (span) {
                         span.classList.add('kw-active');
-                        // Auto-scroll to keep the active word visible
                         var rect = span.getBoundingClientRect();
                         var viewH = window.innerHeight;
                         if (rect.top < 80 || rect.bottom > viewH - 100) {
@@ -322,12 +345,10 @@
                 }
             }
 
-            // ─── Karaoke toggle button ──────────────────────────────────────
             btnKaraoke.addEventListener("click", function() {
                 karaokeEnabled = !karaokeEnabled;
                 if (karaokeEnabled) {
                     btnKaraoke.classList.add("tts-btn-karaoke-active");
-                    // Re-setup if we have timings
                     if (karaokeTimings) setupKaraoke(karaokeTimings);
                 } else {
                     btnKaraoke.classList.remove("tts-btn-karaoke-active");
@@ -335,7 +356,6 @@
                 }
             });
 
-            // ─── Fetch timings from backend ─────────────────────────────────
             function fetchTimings() {
                 var url = "/api/tts/" + encodeURIComponent(substance) +
                           "/" + encodeURIComponent(reportId) +
@@ -354,8 +374,6 @@
                     });
             }
 
-            // Detect default voice based on report gender
-            // Female voice if genre is "Femme" or "Female", otherwise male voice
             function getDefaultVoice() {
                 if (reportGender) {
                     var g = reportGender.toLowerCase().trim();
@@ -366,7 +384,6 @@
                 return "henri";
             }
 
-            // Load available voices from backend
             function loadVoices() {
                 var defaultVoice = getDefaultVoice();
                 fetch("/api/tts/voices")
@@ -402,18 +419,16 @@
 
             loadVoices();
 
-            // Build the audio URL for the current voice
             function getAudioUrl() {
                 return "/api/tts/" + encodeURIComponent(substance) +
                        "/" + encodeURIComponent(reportId) +
                        "?voice=" + encodeURIComponent(currentVoice);
             }
 
-            // Load audio from backend (first play or voice change)
             function loadAudio(andPlay) {
                 if (isLoading) return;
                 isLoading = true;
-                progressText.textContent = "Génération de l'audio...";
+                progressText.textContent = "G\u00e9n\u00e9ration de l'audio...";
                 progressFill.style.width = "0%";
                 iconPlay.style.display = "none";
                 iconPause.style.display = "none";
@@ -426,10 +441,9 @@
                 audio.oncanplaythrough = function() {
                     isLoading = false;
                     btnPlayPause.classList.remove("tts-loading");
-                    progressText.textContent = "Prêt";
+                    progressText.textContent = "Pr\u00eat";
                     iconPlay.style.display = "block";
                     iconPause.style.display = "none";
-                    // Fetch karaoke timings once audio is ready
                     fetchTimings();
                     if (andPlay && !isStopped) {
                         audio.playbackRate = parseFloat(speedSelect.value);
@@ -440,19 +454,17 @@
                 audio.onerror = function() {
                     isLoading = false;
                     btnPlayPause.classList.remove("tts-loading");
-                    progressText.textContent = "Erreur de génération";
+                    progressText.textContent = "Erreur de g\u00e9n\u00e9ration";
                     iconPlay.style.display = "block";
                     iconPause.style.display = "none";
                 };
             }
 
-            // Update progress bar + karaoke during playback
             audio.addEventListener("timeupdate", function() {
                 if (audio.duration && isFinite(audio.duration)) {
                     var pct = (audio.currentTime / audio.duration) * 100;
                     progressFill.style.width = pct + "%";
                     timeDisplay.textContent = formatTime(audio.currentTime) + " / " + formatTime(audio.duration);
-                    // Update karaoke highlighting
                     if (karaokeEnabled) updateKaraoke(audio.currentTime);
                 }
             });
@@ -479,11 +491,10 @@
                 iconPlay.style.display = "block";
                 iconPause.style.display = "none";
                 progressFill.style.width = "100%";
-                progressText.textContent = "Terminé";
+                progressText.textContent = "Termin\u00e9";
                 clearKaraokeHighlight();
             });
 
-            // Play/Pause toggle
             btnPlayPause.addEventListener("click", function() {
                 if (isLoading) return;
                 isStopped = false;
@@ -501,7 +512,6 @@
                 }
             });
 
-            // Stop
             btnStop.addEventListener("click", function(e) {
                 e.stopPropagation();
                 e.preventDefault();
@@ -509,19 +519,17 @@
                 audio.pause();
                 audio.currentTime = 0;
                 progressFill.style.width = "0%";
-                progressText.textContent = "Prêt";
+                progressText.textContent = "Pr\u00eat";
                 timeDisplay.textContent = "";
                 iconPlay.style.display = "block";
                 iconPause.style.display = "none";
                 clearKaraokeHighlight();
             });
 
-            // Speed change
             speedSelect.addEventListener("change", function() {
                 audio.playbackRate = parseFloat(speedSelect.value);
             });
 
-            // Click on progress bar to seek
             progressBar.addEventListener("click", function(e) {
                 if (!audio.duration || !isFinite(audio.duration)) return;
                 var rect = progressBar.getBoundingClientRect();
@@ -529,7 +537,6 @@
                 audio.currentTime = ratio * audio.duration;
             });
 
-            // Voice change: reload audio with new voice
             voiceSelect.addEventListener("change", function() {
                 var newVoice = voiceSelect.value;
                 if (newVoice === currentVoice) return;
@@ -540,7 +547,6 @@
                 audio.removeAttribute("src");
                 progressFill.style.width = "0%";
                 timeDisplay.textContent = "";
-                // Reset karaoke for new voice (timings will differ)
                 karaokeTimings = null;
                 karaokeReady = false;
                 clearKaraokeHighlight();
@@ -548,7 +554,7 @@
                 if (wasPlaying) {
                     loadAudio(true);
                 } else {
-                    progressText.textContent = "Prêt";
+                    progressText.textContent = "Pr\u00eat";
                     iconPlay.style.display = "block";
                     iconPause.style.display = "none";
                 }
@@ -565,7 +571,6 @@
                 audio.src = "";
             });
 
-            // Also handle SPA-style navigation (back button, etc.)
             window.addEventListener("popstate", function() {
                 audio.pause();
                 audio.src = "";
