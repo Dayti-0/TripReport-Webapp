@@ -15,6 +15,8 @@ from cache.manager import (
     save_report,
     is_report_cached,
     get_cached_report_ids,
+    get_merge_suggestions,
+    merge_substances,
 )
 from tts.engine import generate_tts, get_timings, get_voices, VOICES
 
@@ -56,7 +58,8 @@ def internal_error(e):
 def index():
     """Home page with search field and cached substances."""
     substances = get_cached_substances()
-    return render_template("index.html", substances=substances)
+    merge_suggestions = get_merge_suggestions(substances)
+    return render_template("index.html", substances=substances, merge_suggestions=merge_suggestions)
 
 
 @app.route("/substance/<name>")
@@ -104,6 +107,23 @@ def api_substance(name: str):
 def api_substances():
     """API endpoint to list all cached substances."""
     return jsonify(get_cached_substances())
+
+
+@app.route("/api/merge", methods=["POST"])
+def api_merge():
+    """Merge multiple substance cache entries into the one with the longest name.
+
+    Body JSON: {"names": ["mushrooms", "Psilocybin mushrooms"]}
+    """
+    data = request.get_json(silent=True) or {}
+    names = data.get("names", [])
+    if not isinstance(names, list) or len(names) < 2:
+        return jsonify({"error": "Fournir au moins 2 noms dans 'names'."}), 400
+    try:
+        target_slug = merge_substances(names)
+        return jsonify({"ok": True, "target_slug": target_slug})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ─── TTS API ─────────────────────────────────────────────────────────────────
