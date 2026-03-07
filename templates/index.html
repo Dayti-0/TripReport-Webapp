@@ -60,9 +60,14 @@
 {% if substances %}
         <section class="cached-section">
             <h2 class="section-title">Substances en cache</h2>
-            <div class="cached-grid">
+            <p class="drag-hint">Glissez une substance sur une autre pour les fusionner</p>
+            <div class="cached-grid" id="cachedGrid">
                 {% for sub in substances %}
-                <a href="/substance/{{ sub.slug }}" class="cached-card">
+                <a href="/substance/{{ sub.slug }}"
+                   class="cached-card"
+                   draggable="true"
+                   data-name="{{ sub.name }}"
+                   data-slug="{{ sub.slug }}">
                     <span class="cached-name">{{ sub.name }}</span>
                     <span class="cached-count">{{ sub.report_count }} rapport{{ 's' if sub.report_count != 1 }}</span>
                 </a>
@@ -71,9 +76,17 @@
         </section>
         {% endif %}
 
-        <footer class="home-footer">
-            <kbd>Entr&eacute;e</kbd> pour rechercher
-        </footer>
+        <!-- Merge confirmation modal -->
+        <div class="merge-modal-overlay" id="mergeModalOverlay" hidden>
+            <div class="merge-modal">
+                <p class="merge-modal-text" id="mergeModalText"></p>
+                <div class="merge-modal-actions">
+                    <button class="merge-modal-confirm" id="mergeModalConfirm">Fusionner</button>
+                    <button class="merge-modal-cancel" id="mergeModalCancel">Annuler</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -84,6 +97,114 @@
                 window.location.href = "/substance/" + encodeURIComponent(substance);
             }
         });
+
+        // ── Drag & drop merge ──────────────────────────────────────────────────
+        (function() {
+            var draggedName = null;
+            var draggedSlug = null;
+            var draggedEl = null;
+
+            var overlay = document.getElementById("mergeModalOverlay");
+            var modalText = document.getElementById("mergeModalText");
+            var confirmBtn = document.getElementById("mergeModalConfirm");
+            var cancelBtn = document.getElementById("mergeModalCancel");
+            var pendingMerge = null;
+
+            function initCards() {
+                document.querySelectorAll(".cached-card[draggable]").forEach(function(card) {
+                    card.addEventListener("dragstart", onDragStart);
+                    card.addEventListener("dragend", onDragEnd);
+                    card.addEventListener("dragover", onDragOver);
+                    card.addEventListener("dragleave", onDragLeave);
+                    card.addEventListener("drop", onDrop);
+                });
+            }
+
+            function onDragStart(e) {
+                draggedEl = this;
+                draggedName = this.dataset.name;
+                draggedSlug = this.dataset.slug;
+                this.classList.add("dragging");
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", draggedName);
+            }
+
+            function onDragEnd() {
+                if (draggedEl) draggedEl.classList.remove("dragging");
+                document.querySelectorAll(".cached-card.drag-over").forEach(function(c) {
+                    c.classList.remove("drag-over");
+                });
+                draggedEl = null;
+            }
+
+            function onDragOver(e) {
+                if (!draggedEl || this === draggedEl) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                this.classList.add("drag-over");
+            }
+
+            function onDragLeave(e) {
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove("drag-over");
+                }
+            }
+
+            function onDrop(e) {
+                e.preventDefault();
+                this.classList.remove("drag-over");
+                if (!draggedEl || this === draggedEl) return;
+                var targetName = this.dataset.name;
+                var sourceName = draggedName;
+                pendingMerge = [sourceName, targetName];
+                // Longest name is kept by the API; show which will survive
+                var winner = sourceName.length >= targetName.length ? sourceName : targetName;
+                modalText.textContent = "Fusionner \"" + sourceName + "\" et \"" + targetName + "\" → \"" + winner + "\" ?";
+                overlay.hidden = false;
+            }
+
+            confirmBtn.addEventListener("click", function() {
+                if (!pendingMerge) return;
+                confirmBtn.disabled = true;
+                confirmBtn.textContent = "Fusion…";
+                fetch("/api/merge", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({names: pendingMerge})
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    overlay.hidden = true;
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = "Fusionner";
+                    if (data.ok) {
+                        location.reload();
+                    } else {
+                        alert("Erreur : " + (data.error || "inconnue"));
+                    }
+                })
+                .catch(function() {
+                    overlay.hidden = true;
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = "Fusionner";
+                    alert("Erreur réseau.");
+                });
+            });
+
+            cancelBtn.addEventListener("click", function() {
+                overlay.hidden = true;
+                pendingMerge = null;
+            });
+
+            overlay.addEventListener("click", function(e) {
+                if (e.target === overlay) {
+                    overlay.hidden = true;
+                    pendingMerge = null;
+                }
+            });
+
+            initCards();
+        })();
 
         function mergeGroup(btn) {
             var group = btn.closest(".merge-group");

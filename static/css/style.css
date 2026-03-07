@@ -298,6 +298,112 @@ a:hover {
     font-size: 0.7rem;
 }
 
+/* Drag hint */
+.drag-hint {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 0.8rem;
+    letter-spacing: 0.3px;
+}
+
+/* Drag states */
+.cached-card.dragging {
+    opacity: 0.4;
+    cursor: grabbing;
+    transform: scale(0.97);
+}
+
+.cached-card.drag-over {
+    border-color: var(--yellow);
+    box-shadow: 0 0 0 2px var(--yellow), var(--shadow-glow);
+    transform: translateY(-3px) scale(1.03);
+    background: var(--bg-card-hover);
+}
+
+.cached-card.drag-over .cached-name {
+    color: var(--yellow);
+}
+
+/* Merge confirmation modal */
+.merge-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.merge-modal-overlay[hidden] {
+    display: none;
+}
+
+.merge-modal {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-hover);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+}
+
+.merge-modal-text {
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+.merge-modal-actions {
+    display: flex;
+    gap: 0.7rem;
+    justify-content: flex-end;
+}
+
+.merge-modal-confirm {
+    padding: 0.45rem 1.1rem;
+    background: var(--green-dim);
+    border: 1px solid var(--green);
+    color: var(--green);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.merge-modal-confirm:hover:not(:disabled) {
+    background: var(--green);
+    color: #000;
+}
+
+.merge-modal-confirm:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.merge-modal-cancel {
+    padding: 0.45rem 1.1rem;
+    background: transparent;
+    border: 1px solid var(--border-hover);
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.merge-modal-cancel:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
+}
+
 
 /* Merge suggestions */
 .merge-section {
