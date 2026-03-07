@@ -39,7 +39,7 @@
             <p class="merge-hint">Ces substances semblent être les mêmes sous des noms différents. Fusionnez-les pour regrouper tous leurs rapports.</p>
             <div class="merge-list" id="mergeList">
                 {% for group in merge_suggestions %}
-                <div class="merge-group" data-names="{{ group | map(attribute='name') | list | tojson }}">
+                <div class="merge-group" data-names='{{ group | map(attribute="name") | list | tojson }}'>
                     <div class="merge-group-names">
                         {% for sub in group %}
                         <span class="merge-tag {% if loop.first %}merge-tag-target{% endif %}">
