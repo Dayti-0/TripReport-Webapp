@@ -33,28 +33,7 @@
             </div>
         </form>
 
-        <!-- Recent searches (populated by JS) -->
-        <div class="recent-searches" id="recentSearches" style="display: none;">
-            <p class="recent-title">Recherches r&eacute;centes</p>
-            <div class="recent-list" id="recentList"></div>
-        </div>
-
-        <!-- Popular suggestions -->
-        <div class="suggestions-section">
-            <p class="recent-title">Substances populaires</p>
-            <div class="suggestion-chips">
-                <button class="suggestion-chip" data-substance="LSD">LSD</button>
-                <button class="suggestion-chip" data-substance="Cannabis">Cannabis</button>
-                <button class="suggestion-chip" data-substance="MDMA">MDMA</button>
-                <button class="suggestion-chip" data-substance="Psilocybin mushrooms">Psilocybin</button>
-                <button class="suggestion-chip" data-substance="DMT">DMT</button>
-                <button class="suggestion-chip" data-substance="Ketamine">K&eacute;tamine</button>
-                <button class="suggestion-chip" data-substance="4-HO-MET">4-HO-MET</button>
-                <button class="suggestion-chip" data-substance="2C-B">2C-B</button>
-            </div>
-        </div>
-
-        {% if substances %}
+{% if substances %}
         <section class="cached-section">
             <h2 class="section-title">Substances en cache</h2>
             <div class="cached-grid">
@@ -74,64 +53,13 @@
     </div>
 
     <script>
-        (function() {
-            var STORAGE_KEY = "tripReportSearchHistory";
-            var MAX_HISTORY = 8;
-
-            function getHistory() {
-                try {
-                    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-                } catch(e) { return []; }
+        document.getElementById("searchForm").addEventListener("submit", function(e) {
+            e.preventDefault();
+            var substance = document.getElementById("searchInput").value.trim();
+            if (substance) {
+                window.location.href = "/substance/" + encodeURIComponent(substance);
             }
-
-            function addToHistory(term) {
-                var h = getHistory().filter(function(x) { return x.toLowerCase() !== term.toLowerCase(); });
-                h.unshift(term);
-                if (h.length > MAX_HISTORY) h = h.slice(0, MAX_HISTORY);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(h));
-            }
-
-            function renderHistory() {
-                var history = getHistory();
-                var container = document.getElementById("recentSearches");
-                var list = document.getElementById("recentList");
-                if (!history.length || !container || !list) return;
-                container.style.display = "block";
-                list.innerHTML = "";
-                history.forEach(function(term) {
-                    var item = document.createElement("button");
-                    item.className = "recent-item";
-                    item.textContent = term;
-                    item.type = "button";
-                    item.addEventListener("click", function() {
-                        window.location.href = "/substance/" + encodeURIComponent(term);
-                    });
-                    list.appendChild(item);
-                });
-            }
-
-            renderHistory();
-
-            // Form submission
-            document.getElementById("searchForm").addEventListener("submit", function(e) {
-                e.preventDefault();
-                var substance = document.getElementById("searchInput").value.trim();
-                if (substance) {
-                    addToHistory(substance);
-                    window.location.href = "/substance/" + encodeURIComponent(substance);
-                }
-            });
-
-            // Suggestion chips
-            var chips = document.querySelectorAll(".suggestion-chip");
-            for (var i = 0; i < chips.length; i++) {
-                chips[i].addEventListener("click", function() {
-                    var sub = this.getAttribute("data-substance");
-                    addToHistory(sub);
-                    window.location.href = "/substance/" + encodeURIComponent(sub);
-                });
-            }
-        })();
+        });
     </script>
 </body>
 </html>
