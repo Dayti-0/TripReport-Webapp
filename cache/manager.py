@@ -167,8 +167,9 @@ def get_merge_suggestions(substances: list[dict]) -> list[dict]:
             if i == j or j in merged_indices:
                 continue
             slug_j = _slugify(substances[j]["name"])
-            # One slug is a substring of the other
-            if slug_i in slug_j or slug_j in slug_i:
+            # One slug is a prefix of the other (e.g. "lsd" vs "lsd-25" → merge,
+            # but "lsd" vs "1cp-lsd" → do NOT merge because "lsd" is a suffix, not prefix)
+            if slug_j.startswith(slug_i + "-") or slug_i.startswith(slug_j + "-"):
                 group.append(j)
 
         if len(group) > 1:
