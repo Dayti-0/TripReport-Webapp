@@ -146,3 +146,129 @@ def is_report_cached(substance_name: str, report_id: str) -> bool:
     slug = _slugify(substance_name)
     report_path = os.path.join(DATA_DIR, slug, "reports", f"{report_id}.json")
     return os.path.isfile(report_path)
+
+
+def get_merge_suggestions(substances: list[dict]) -> list[dict]:
+    """Detect substance pairs that are likely duplicates (one name is a substring of another).
+
+    Returns a list of groups, each being a list of substance dicts that should be merged.
+    The first element in each group is the longest-named substance (the merge target).
+    """
+    n = len(substances)
+    merged_indices: set[int] = set()
+    groups = []
+
+    for i in range(n):
+        if i in merged_indices:
+            continue
+        slug_i = _slugify(substances[i]["name"])
+        group = [i]
+        for j in range(n):
+            if i == j or j in merged_indices:
+                continue
+            slug_j = _slugify(substances[j]["name"])
+            # One slug is a substring of the other
+            if slug_i in slug_j or slug_j in slug_i:
+                group.append(j)
+
+        if len(group) > 1:
+            for idx in group:
+                merged_indices.add(idx)
+            # Sort by name length descending; longest name is the merge target
+            group_subs = sorted([substances[k] for k in group], key=lambda s: len(s["name"]), reverse=True)
+            groups.append(group_subs)
+
+    return groups
+
+
+def merge_substances(names: list[str]) -> str:
+    """Merge multiple substance cache entries into the one with the longest name.
+
+    Moves all report files from the shorter-named entries into the longest-named
+    entry's directory, rebuilds the index, and removes the now-empty directories.
+
+    Returns the slug of the merged (target) substance.
+    """
+    if len(names) < 2:
+        raise ValueError("Need at least 2 substance names to merge.")
+
+    # Longest name wins
+    target_name = max(names, key=len)
+    target_slug = _slugify(target_name)
+    target_dir, target_reports_dir = _ensure_dirs(target_slug)
+
+    # Load existing target index (if any)
+    target_index_path = os.path.join(target_dir, "index.json")
+    target_index: dict = {"substance_name": target_name, "reports": [], "last_scraped": ""}
+    if os.path.isfile(target_index_path):
+        try:
+            with open(target_index_path, "r", encoding="utf-8") as f:
+                target_index = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    target_index["substance_name"] = target_name
+
+    existing_report_ids = {r["id"] for r in target_index["reports"]}
+
+    for name in names:
+        if name == target_name:
+            continue
+        slug = _slugify(name)
+        src_dir = os.path.join(DATA_DIR, slug)
+        src_reports_dir = os.path.join(src_dir, "reports")
+        src_index_path = os.path.join(src_dir, "index.json")
+
+        if not os.path.isdir(src_dir):
+            continue
+
+        # Load source index for metadata
+        src_index: dict = {"reports": []}
+        if os.path.isfile(src_index_path):
+            try:
+                with open(src_index_path, "r", encoding="utf-8") as f:
+                    src_index = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        src_meta_by_id = {r["id"]: r for r in src_index.get("reports", [])}
+
+        # Move report files
+        if os.path.isdir(src_reports_dir):
+            for fname in os.listdir(src_reports_dir):
+                if not fname.endswith(".json"):
+                    continue
+                report_id = fname[:-5]
+                src_path = os.path.join(src_reports_dir, fname)
+                dst_path = os.path.join(target_reports_dir, fname)
+
+                # Move the file
+                import shutil
+                shutil.move(src_path, dst_path)
+
+                # Add to target index if not already there
+                if report_id not in existing_report_ids:
+                    meta = src_meta_by_id.get(report_id)
+                    if meta:
+                        target_index["reports"].append(meta)
+                    else:
+                        # Build minimal meta from the report file itself
+                        try:
+                            with open(dst_path, "r", encoding="utf-8") as f:
+                                rdata = json.load(f)
+                            meta = {k: v for k, v in rdata.items()
+                                    if k not in ("body_original", "body_translated")}
+                            target_index["reports"].append(meta)
+                        except (json.JSONDecodeError, IOError):
+                            pass
+                    existing_report_ids.add(report_id)
+
+        # Remove source directory
+        import shutil as _shutil
+        _shutil.rmtree(src_dir, ignore_errors=True)
+
+    # Write updated target index
+    target_index["last_scraped"] = datetime.now(timezone.utc).isoformat()
+    with open(target_index_path, "w", encoding="utf-8") as f:
+        json.dump(target_index, f, ensure_ascii=False, indent=2)
+
+    return target_slug

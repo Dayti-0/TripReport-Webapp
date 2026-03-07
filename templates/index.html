@@ -33,6 +33,30 @@
             </div>
         </form>
 
+{% if merge_suggestions %}
+        <section class="merge-section">
+            <h2 class="section-title merge-title">&#9888; Doublons détectés</h2>
+            <p class="merge-hint">Ces substances semblent être les mêmes sous des noms différents. Fusionnez-les pour regrouper tous leurs rapports.</p>
+            <div class="merge-list" id="mergeList">
+                {% for group in merge_suggestions %}
+                <div class="merge-group" data-names="{{ group | map(attribute='name') | list | tojson }}">
+                    <div class="merge-group-names">
+                        {% for sub in group %}
+                        <span class="merge-tag {% if loop.first %}merge-tag-target{% endif %}">
+                            {{ sub.name }} <small>({{ sub.report_count }})</small>
+                        </span>
+                        {% if not loop.last %}<span class="merge-arrow">+</span>{% endif %}
+                        {% endfor %}
+                        <span class="merge-arrow">→</span>
+                        <span class="merge-tag merge-tag-result">{{ group[0].name }}</span>
+                    </div>
+                    <button class="merge-btn" onclick="mergeGroup(this)">Fusionner</button>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
 {% if substances %}
         <section class="cached-section">
             <h2 class="section-title">Substances en cache</h2>
@@ -60,6 +84,35 @@
                 window.location.href = "/substance/" + encodeURIComponent(substance);
             }
         });
+
+        function mergeGroup(btn) {
+            var group = btn.closest(".merge-group");
+            var names = JSON.parse(group.dataset.names);
+            btn.disabled = true;
+            btn.textContent = "Fusion en cours…";
+            fetch("/api/merge", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({names: names})
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok) {
+                    group.style.opacity = "0.4";
+                    btn.textContent = "Fusionné ✓";
+                    setTimeout(function() { location.reload(); }, 800);
+                } else {
+                    btn.disabled = false;
+                    btn.textContent = "Fusionner";
+                    alert("Erreur : " + (data.error || "inconnue"));
+                }
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.textContent = "Fusionner";
+                alert("Erreur réseau.");
+            });
+        }
     </script>
 </body>
 </html>
